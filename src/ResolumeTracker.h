@@ -364,6 +364,10 @@ private:
     int selectedColumnId;
     int connectedColumnId;
     
+    // Track current deck to detect changes
+    int currentDeckId;
+    bool deckInitialized;
+    
     // Track most recently selected layer and clip
     int selectedLayerId;
     int selectedClipLayerId;  // Which layer the selected clip is in
@@ -403,6 +407,7 @@ private:
     
 public:
     ResolumeTracker() : selectedColumnId(0), connectedColumnId(0), 
+                       currentDeckId(0), deckInitialized(false),
                        selectedLayerId(0), selectedClipLayerId(0), selectedClipId(0),
                        lastSelectionType(LastSelectionType::NONE) {
         // Initialize layers (typically 8-10 layers in Resolume)
@@ -415,6 +420,32 @@ public:
                           const std::vector<int>& integers, const std::vector<std::string>& strings) {
         // All messages should start with "/composition"
         if (address.find("/composition") != 0) return;
+        
+        // Check for deck selection messages to detect deck changes
+        if (address.find("/composition/decks/") == 0) {
+            size_t deckStart = 18; // Length of "/composition/decks/"
+            size_t deckEnd = address.find('/', deckStart);
+            if (deckEnd != std::string::npos) {
+                std::string deckPart = address.substr(deckStart, deckEnd - deckStart);
+                int deckId = extractNumber(deckPart);
+                std::string remainder = address.substr(deckEnd + 1);
+                
+                // Check if this deck is being selected
+                if (remainder == "select" || remainder == "selected") {
+                    if (!integers.empty() && integers[0] == 1) {
+                        // A deck has been selected
+                        if (deckInitialized && deckId != currentDeckId) {
+                            // Deck has changed, clear all data
+                            std::cout << "Deck changed from " << currentDeckId << " to " << deckId << " - clearing all data" << std::endl;
+                            clearAll();
+                        }
+                        currentDeckId = deckId;
+                        deckInitialized = true;
+                    }
+                }
+            }
+            // Don't return here - let deck messages be processed normally below
+        }
         
         // Remove "/composition" from the front
         std::string remainder = address.substr(12); // Length of "/composition"
@@ -491,6 +522,82 @@ public:
             return;
         }
         
+        if (firstPart == "decks") {
+            // Handle deck-specific messages (layers within a deck)
+            if (nextRemainder.empty()) return;
+            
+            size_t secondSlash = nextRemainder.find('/', 1);
+            if (secondSlash != std::string::npos) {
+                std::string deckPart = nextRemainder.substr(1, secondSlash - 1);
+                int deckId = extractNumber(deckPart);
+                std::string deckRemainder = nextRemainder.substr(secondSlash);
+                
+                // Check if this is for the current deck
+                if (deckInitialized && deckId == currentDeckId) {
+                    // Process deck-specific messages the same way as composition messages
+                    if (deckRemainder.find("/layers/") == 0) {
+                        // Remove "/layers" and process as layer message
+                        std::string layerRemainder = deckRemainder.substr(7); // Length of "/layers"
+                        
+                        if (!layerRemainder.empty()) {
+                            size_t thirdSlash = layerRemainder.find('/', 1);
+                            if (thirdSlash == std::string::npos) {
+                                // Just /layers/X
+                                int layerId = extractNumber(layerRemainder);
+                                auto layer = getLayer(layerId);
+                                if (layer) {
+                                    layer->processOSCMessage("/", floats, integers, strings);
+                                }
+                            } else {
+                                // /layers/X/something
+                                std::string layerPart = layerRemainder.substr(1, thirdSlash - 1);
+                                int layerId = extractNumber(layerPart);
+                                std::string layerMessages = layerRemainder.substr(thirdSlash);
+                                
+                                // Check for selections
+                                if (layerMessages == "/select" || layerMessages == "/selected") {
+                                    if (!integers.empty() && integers[0] == 1) {
+                                        selectedLayerId = layerId;
+                                        lastSelectionType = LastSelectionType::LAYER;
+                                    }
+                                }
+                                
+                                // Handle clip selections
+                                size_t clipsPos = layerMessages.find("/clips/");
+                                if (clipsPos != std::string::npos) {
+                                    size_t clipIdStart = clipsPos + 7;
+                                    size_t clipIdEnd = layerMessages.find('/', clipIdStart);
+                                    if (clipIdEnd != std::string::npos) {
+                                        std::string clipIdStr = layerMessages.substr(clipIdStart, clipIdEnd - clipIdStart);
+                                        int clipId = extractNumber(clipIdStr);
+                                        std::string clipProperty = layerMessages.substr(clipIdEnd + 1);
+                                        
+                                        if (clipProperty == "select" || clipProperty == "selected") {
+                                            if (!integers.empty() && integers[0] == 1) {
+                                                selectedClipLayerId = layerId;
+                                                selectedClipId = clipId;
+                                                lastSelectionType = LastSelectionType::CLIP;
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                auto layer = getLayer(layerId);
+                                if (layer) {
+                                    layer->processOSCMessage(layerMessages, floats, integers, strings);
+                                }
+                            }
+                        }
+                    }
+                } else if (!deckInitialized) {
+                    // If no deck has been initialized yet, assume this is the current deck
+                    currentDeckId = deckId;
+                    deckInitialized = true;
+                }
+            }
+            return;
+        }
+        
         if (firstPart == "columns") {
             // Handle column selection/connection
             if (nextRemainder.empty()) return;
@@ -542,6 +649,8 @@ public:
     
     int getSelectedColumnId() const { return selectedColumnId; }
     int getConnectedColumnId() const { return connectedColumnId; }
+    int getCurrentDeckId() const { return currentDeckId; }
+    bool isDeckInitialized() const { return deckInitialized; }
     
     // New getters for selected layer and clip
     int getSelectedLayerId() const { return selectedLayerId; }
@@ -592,6 +701,16 @@ public:
     PropertyDictionary& getDeckProperties() { return deckProperties; }
     const PropertyDictionary& getDeckProperties() const { return deckProperties; }
     
+    // Method to manually set/change deck (useful for testing)
+    void setCurrentDeck(int deckId) {
+        if (deckInitialized && deckId != currentDeckId) {
+            std::cout << "Manually changing deck from " << currentDeckId << " to " << deckId << " - clearing all data" << std::endl;
+            clearAll();
+        }
+        currentDeckId = deckId;
+        deckInitialized = true;
+    }
+    
     void clearAll() {
         selectedColumnId = 0;
         connectedColumnId = 0;
@@ -619,6 +738,7 @@ public:
         
         // Print selection state
         std::cout << "\nSELECTION STATE:" << std::endl;
+        std::cout << "  |-- Current Deck: " << (deckInitialized ? std::to_string(currentDeckId) : "none") << std::endl;
         std::cout << "  |-- Selected Column: " << (selectedColumnId ? std::to_string(selectedColumnId) : "none") << std::endl;
         std::cout << "  |-- Connected Column: " << (connectedColumnId ? std::to_string(connectedColumnId) : "none") << std::endl;
         std::cout << "  |-- Selected Layer: " << (selectedLayerId ? std::to_string(selectedLayerId) : "none") << std::endl;
