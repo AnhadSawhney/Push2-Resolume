@@ -48,32 +48,34 @@ protected:
             tracker.processOSCMessage(address, floats, integers, strings);
             
             // Debug output
-            std::cout << "Received: " << address;
-            if (!floats.empty()) {
-                std::cout << " floats=[";
-                for (size_t i = 0; i < floats.size(); ++i) {
-                    if (i > 0) std::cout << ", ";
-                    std::cout << floats[i];
+            #ifdef DEBUG_OSC
+                std::cout << "Received: " << address;
+                if (!floats.empty()) {
+                    std::cout << " floats=[";
+                    for (size_t i = 0; i < floats.size(); ++i) {
+                        if (i > 0) std::cout << ", ";
+                        std::cout << floats[i];
+                    }
+                    std::cout << "]";
                 }
-                std::cout << "]";
-            }
-            if (!integers.empty()) {
-                std::cout << " integers=[";
-                for (size_t i = 0; i < integers.size(); ++i) {
-                    if (i > 0) std::cout << ", ";
-                    std::cout << integers[i];
+                if (!integers.empty()) {
+                    std::cout << " integers=[";
+                    for (size_t i = 0; i < integers.size(); ++i) {
+                        if (i > 0) std::cout << ", ";
+                        std::cout << integers[i];
+                    }
+                    std::cout << "]";
                 }
-                std::cout << "]";
-            }
-            if (!strings.empty()) {
-                std::cout << " strings=[";
-                for (size_t i = 0; i < strings.size(); ++i) {
-                    if (i > 0) std::cout << ", ";
-                    std::cout << "\"" << strings[i] << "\"";
+                if (!strings.empty()) {
+                    std::cout << " strings=[";
+                    for (size_t i = 0; i < strings.size(); ++i) {
+                        if (i > 0) std::cout << ", ";
+                        std::cout << "\"" << strings[i] << "\"";
+                    }
+                    std::cout << "]";
                 }
-                std::cout << "]";
-            }
-            std::cout << std::endl;
+                std::cout << std::endl;
+            #endif
             
         } catch (Exception& e) {
             std::cerr << "Error parsing OSC message: " << e.what() << std::endl;

@@ -390,11 +390,14 @@ private:
     // Helper function to print properties nicely
     void printProperties(const PropertyDictionary& props, const std::string& indent) const {
         if (props.empty()) return;
-        
+
+        size_t count = 0;
+        size_t total = props.size();
         for (const auto& pair : props) {
-            std::cout << indent << "├── " << pair.first << " = " 
-                     << props.getPropertyAsString(pair.first) 
-                     << " (" << props.getPropertyType(pair.first) << ")" << std::endl;
+            bool isLast = (++count == total);
+            std::cout << indent << (isLast ? "`-- " : "|-- ") << pair.first << " = "
+                      << props.getPropertyAsString(pair.first)
+                      << " (" << props.getPropertyType(pair.first) << ")" << std::endl;
         }
     }
     
@@ -609,19 +612,19 @@ public:
         // Print composition/deck properties
         std::cout << "COMPOSITION/DECK PROPERTIES:" << std::endl;
         if (deckProperties.empty()) {
-            std::cout << "  └── (no properties)" << std::endl;
+            std::cout << "  `-- (no properties)" << std::endl;
         } else {
             printProperties(deckProperties, "  ");
         }
         
         // Print selection state
         std::cout << "\nSELECTION STATE:" << std::endl;
-        std::cout << "  ├── Selected Column: " << (selectedColumnId ? std::to_string(selectedColumnId) : "none") << std::endl;
-        std::cout << "  ├── Connected Column: " << (connectedColumnId ? std::to_string(connectedColumnId) : "none") << std::endl;
-        std::cout << "  ├── Selected Layer: " << (selectedLayerId ? std::to_string(selectedLayerId) : "none") << std::endl;
-        std::cout << "  ├── Selected Clip: " << (selectedClipLayerId && selectedClipId ? 
+        std::cout << "  |-- Selected Column: " << (selectedColumnId ? std::to_string(selectedColumnId) : "none") << std::endl;
+        std::cout << "  |-- Connected Column: " << (connectedColumnId ? std::to_string(connectedColumnId) : "none") << std::endl;
+        std::cout << "  |-- Selected Layer: " << (selectedLayerId ? std::to_string(selectedLayerId) : "none") << std::endl;
+        std::cout << "  |-- Selected Clip: " << (selectedClipLayerId && selectedClipId ? 
                      "Layer " + std::to_string(selectedClipLayerId) + ", Clip " + std::to_string(selectedClipId) : "none") << std::endl;
-        std::cout << "  └── Last Selection Type: ";
+        std::cout << "  `-- Last Selection Type: ";
         switch (lastSelectionType) {
             case LastSelectionType::NONE: std::cout << "none"; break;
             case LastSelectionType::LAYER: std::cout << "layer"; break;
@@ -630,7 +633,7 @@ public:
         std::cout << std::endl;
         
         // Print layers
-        std::cout << "\n🎬 LAYERS:" << std::endl;
+        std::cout << "\n LAYERS:" << std::endl;
         bool hasAnyLayerData = false;
         
         for (const auto& layer : layers) {
@@ -647,39 +650,39 @@ public:
             
             if (hasLayerData || hasClipData) {
                 hasAnyLayerData = true;
-                std::string layerPrefix = (layer->id == selectedLayerId) ? "🟢 " : "   ";
+                std::string layerPrefix = (layer->id == selectedLayerId) ? "X " : "   ";
                 std::cout << layerPrefix << "Layer " << layer->id << ":" << std::endl;
                 
                 // Print layer properties
                 if (!layer->properties.empty()) {
-                    std::cout << "     ├── Properties:" << std::endl;
-                    printProperties(layer->properties, "     │   ");
+                    std::cout << "     |-- Properties:" << std::endl;
+                    printProperties(layer->properties, "     |   ");
                 }
                 
                 // Print layer effects
                 if (!layer->effects.empty()) {
                     bool isLast = !hasClipData;
-                    std::cout << "     " << (isLast ? "└── " : "├── ") << "Video Effects:" << std::endl;
+                    std::cout << "     " << (isLast ? "`-- " : "|-- ") << "Video Effects:" << std::endl;
                     for (size_t i = 0; i < layer->effects.size(); i++) {
                         const auto& effect = layer->effects[i];
                         bool isLastEffect = (i == layer->effects.size() - 1);
-                        std::string effectPrefix = isLastEffect ? "└── " : "├── ";
-                        std::cout << "     " << (isLast ? "    " : "│   ") << effectPrefix << effect->name << ":" << std::endl;
+                        std::string effectPrefix = isLastEffect ? "`-- " : "|-- ";
+                        std::cout << "     " << (isLast ? "    " : "|   ") << effectPrefix << effect->name << ":" << std::endl;
                         
                         // Print effect properties
-                        printProperties(effect->properties, "     " + (isLast ? "    " : "│   ") + (isLastEffect ? "    " : "│   "));
+                        printProperties(effect->properties, std::string("     ") + (isLast ? "    " : "|   ") + (isLastEffect ? "    " : "|   "));
                     }
                 }
                 
                 // Print clips
                 if (hasClipData) {
-                    std::cout << "     └── Clips:" << std::endl;
+                    std::cout << "     `-- Clips:" << std::endl;
                     for (const auto& clip : layer->clips) {
                         bool hasThisClipData = !clip->name.empty() || !clip->properties.empty() || !clip->effects.empty();
                         
                         if (hasThisClipData) {
                             bool isSelected = (layer->id == selectedClipLayerId && clip->id == selectedClipId);
-                            std::string clipPrefix = isSelected ? "🔵 " : "   ";
+                            std::string clipPrefix = isSelected ? "X " : "   ";
                             std::cout << "         " << clipPrefix << "Clip " << clip->id;
                             if (!clip->name.empty()) {
                                 std::cout << " (\"" << clip->name << "\")";
@@ -688,22 +691,22 @@ public:
                             
                             // Print clip properties
                             if (!clip->properties.empty()) {
-                                std::cout << "             ├── Properties:" << std::endl;
-                                printProperties(clip->properties, "             │   ");
+                                std::cout << "             |-- Properties:" << std::endl;
+                                printProperties(clip->properties, "             |   ");
                             }
                             
                             // Print clip effects
                             if (!clip->effects.empty()) {
                                 bool hasProps = !clip->properties.empty();
-                                std::cout << "             " << (hasProps ? "└── " : "└── ") << "Video Effects:" << std::endl;
+                                std::cout << "             " << (hasProps ? "`-- " : "`-- ") << "Video Effects:" << std::endl;
                                 for (size_t i = 0; i < clip->effects.size(); i++) {
                                     const auto& effect = clip->effects[i];
                                     bool isLastEffect = (i == clip->effects.size() - 1);
-                                    std::string effectPrefix = isLastEffect ? "└── " : "├── ";
+                                    std::string effectPrefix = isLastEffect ? "`-- " : "|-- ";
                                     std::cout << "                 " << effectPrefix << effect->name << ":" << std::endl;
                                     
                                     // Print effect properties
-                                    printProperties(effect->properties, "                 " + (isLastEffect ? "    " : "│   "));
+                                    printProperties(effect->properties, std::string("                 ") + (isLastEffect ? "    " : "|   "));
                                 }
                             }
                         }
@@ -714,7 +717,7 @@ public:
         }
         
         if (!hasAnyLayerData) {
-            std::cout << "  └── (no layer data)" << std::endl;
+            std::cout << "  `-- (no layer data)" << std::endl;
         }
         
         // Print summary statistics
@@ -741,11 +744,11 @@ public:
         
         totalProperties += deckProperties.size();
         
-        std::cout << "\n📊 SUMMARY STATISTICS:" << std::endl;
-        std::cout << "  ├── Active Layers: " << totalLayers << std::endl;
-        std::cout << "  ├── Active Clips: " << totalClips << std::endl;
-        std::cout << "  ├── Total Effects: " << totalEffects << std::endl;
-        std::cout << "  └── Total Properties: " << totalProperties << std::endl;
+        std::cout << "\nSUMMARY STATISTICS:" << std::endl;
+        std::cout << "  |-- Active Layers: " << totalLayers << std::endl;
+        std::cout << "  |-- Active Clips: " << totalClips << std::endl;
+        std::cout << "  |-- Total Effects: " << totalEffects << std::endl;
+        std::cout << "  `-- Total Properties: " << totalProperties << std::endl;
         
         std::cout << "\n==========================================\n" << std::endl;
     }

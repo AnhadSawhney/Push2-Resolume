@@ -5,11 +5,11 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "(Windows) Launch with OSC Output",
+            "name": "(Windows) Launch",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/out/build/x64-debug/rkbx_choreographer.exe",
-            "args": ["-o"],
+            "program": "${workspaceFolder}/out/build/x64-debug/push2_resolume.exe",
+            "args": [""],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/out/build/x64-debug/",
             "environment": [],

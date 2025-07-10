@@ -11,6 +11,7 @@
 #include <iostream>
 #include <cstring>
 #include <chrono>
+#include <algorithm>
 
 // Push 2 USB identifiers from documentation
 const uint16_t PUSH2_VENDOR_ID = 0x2982;   // Ableton
@@ -382,9 +383,9 @@ public:
         std::vector<uint8_t> sysex = {
             0xF0, 0x00, 0x21, 0x1D, 0x01, 0x01, 0x03, // Set LED Color Palette Entry
             0x7F, // Color index 127 (temporary)
-            (red >> 1), 0x00,     // Red (7+1 bits)
-            (green >> 1), 0x00,   // Green (7+1 bits) 
-            (blue >> 1), 0x00,    // Blue (7+1 bits)
+            static_cast<uint8_t>(red >> 1), 0x00,     // Red (7+1 bits)
+            static_cast<uint8_t>(green >> 1), 0x00,   // Green (7+1 bits) 
+            static_cast<uint8_t>(blue >> 1), 0x00,    // Blue (7+1 bits)
             0x00, 0x00,           // White (unused)
             0xF7
         };
@@ -458,13 +459,10 @@ public:
         // Send pixel data in chunks
         size_t totalSent = 0;
         while (totalSent < PUSH2_DISPLAY_BUFFER_SIZE) {
-            size_t chunkSize = std::min((size_t)PUSH2_DISPLAY_TRANSFER_SIZE, 
-                                       PUSH2_DISPLAY_BUFFER_SIZE - totalSent);
+            size_t chunkSize = std::min<size_t>(PUSH2_DISPLAY_TRANSFER_SIZE, PUSH2_DISPLAY_BUFFER_SIZE - totalSent);
             
             int transferred = 0;
-            int result = libusb_bulk_transfer(deviceHandle, PUSH2_BULK_EP_OUT,
-                                            displayBuffer.data() + totalSent, chunkSize,
-                                            &transferred, PUSH2_DISPLAY_TIMEOUT_MS);
+            int result = libusb_bulk_transfer(deviceHandle, PUSH2_BULK_EP_OUT, displayBuffer.data() + totalSent, chunkSize, &transferred, PUSH2_DISPLAY_TIMEOUT_MS);
             
             if (result != 0 || transferred != chunkSize) {
                 std::cerr << "Display transfer failed: " << libusb_error_name(result) << std::endl;

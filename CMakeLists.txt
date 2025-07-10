@@ -10,14 +10,25 @@ project("push2_resolume")
 
 INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}")
 
+# Add executable
+file(GLOB_RECURSE SOURCES "src/*.cpp")
+file(GLOB_RECURSE HEADERS "src/*.h")
+add_executable(push2_resolume ${SOURCES} ${HEADERS})
+
 # separate versions of NetworkingUtils.cpp and UdpSocket.cpp are provided for Win32 and POSIX
 # the IpSystemTypePath selects the correct ones based on the current platform
 
 IF(WIN32)
  set(IpSystemTypePath ip/win32)
  set(LIBS ${LIBS} Ws2_32 winmm)
+ message(STATUS ">>> Windows")
+    target_link_libraries(push2_resolume ${CMAKE_CURRENT_SOURCE_DIR}/lib/libusb-1.0.lib)
 ELSE(WIN32)
  set(IpSystemTypePath ip/posix)
+ message(STATUS ">>> Linux")
+  add_library( libusb SHARED IMPORTED )
+  set_target_properties( libusb PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/lib/libusb-1.0.so )
+  target_link_libraries(push2_resolume libusb)
 ENDIF(WIN32)
 
 ADD_LIBRARY(oscpack 
@@ -49,41 +60,15 @@ osc/OscOutboundPacketStream.cpp
 
 )
 
-# Add executable
-file(GLOB_RECURSE SOURCES "src/*.cpp")
-file(GLOB_RECURSE HEADERS "src/*.h")
-add_executable(rkbx_choreographer ${SOURCES} ${HEADERS})
-TARGET_LINK_LIBRARIES(rkbx_choreographer oscpack ${LIBS})
-
-# Find all .tsv files in source directory
-file(GLOB TSV_FILES "${CMAKE_SOURCE_DIR}/*.tsv")
-
-add_custom_command(
-    TARGET rkbx_choreographer POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${CMAKE_SOURCE_DIR}/offsets.txt
-            ${CMAKE_CURRENT_BINARY_DIR}/offsets.txt
-    COMMAND ${CMAKE_COMMAND} -E make_directory
-            ${CMAKE_CURRENT_BINARY_DIR}/choreo
-)
-
-# Copy each .tsv file individually
-foreach(TSV_FILE ${TSV_FILES})
-    add_custom_command(
-        TARGET rkbx_choreographer POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${TSV_FILE}
-                ${CMAKE_CURRENT_BINARY_DIR}/choreo/
-    )
-endforeach()
+TARGET_LINK_LIBRARIES(push2_resolume oscpack ${LIBS})
 
 # Set C++ standard
 if (CMAKE_VERSION VERSION_GREATER 3.12)
-  set_property(TARGET rkbx_choreographer PROPERTY CXX_STANDARD 20)
+  set_property(TARGET push2_resolume PROPERTY CXX_STANDARD 20)
 endif()
 
 # Include directories
-target_include_directories(rkbx_choreographer PRIVATE
+target_include_directories(push2_resolume PRIVATE
     "${CMAKE_SOURCE_DIR}/include"
     "${CMAKE_SOURCE_DIR}/include/ip"
     "${CMAKE_SOURCE_DIR}/include/osc"
