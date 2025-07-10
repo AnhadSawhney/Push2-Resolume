@@ -5,45 +5,133 @@
 #include <string>
 #include <map>
 #include <memory>
+#include <iostream>
+#include <variant>
+#include <sstream>
+
+// Unified property value type
+using PropertyValue = std::variant<float, int, std::string>;
 
 class PropertyDictionary {
 public:
-    std::map<std::string, float> floats;
-    std::map<std::string, int> integers;
-    std::map<std::string, std::string> strings;
+    std::map<std::string, PropertyValue> properties;
     
     void setFloat(const std::string& key, float value) {
-        floats[key] = value;
+        properties[key] = value;
     }
     
     void setInt(const std::string& key, int value) {
-        integers[key] = value;
+        properties[key] = value;
     }
     
     void setString(const std::string& key, const std::string& value) {
-        strings[key] = value;
+        properties[key] = value;
+    }
+    
+    // Generic setter
+    void setValue(const std::string& key, const PropertyValue& value) {
+        properties[key] = value;
     }
     
     float getFloat(const std::string& key, float defaultValue = 0.0f) const {
-        auto it = floats.find(key);
-        return (it != floats.end()) ? it->second : defaultValue;
+        auto it = properties.find(key);
+        if (it != properties.end()) {
+            if (std::holds_alternative<float>(it->second)) {
+                return std::get<float>(it->second);
+            } else if (std::holds_alternative<int>(it->second)) {
+                return static_cast<float>(std::get<int>(it->second));
+            }
+        }
+        return defaultValue;
     }
     
     int getInt(const std::string& key, int defaultValue = 0) const {
-        auto it = integers.find(key);
-        return (it != integers.end()) ? it->second : defaultValue;
+        auto it = properties.find(key);
+        if (it != properties.end()) {
+            if (std::holds_alternative<int>(it->second)) {
+                return std::get<int>(it->second);
+            } else if (std::holds_alternative<float>(it->second)) {
+                return static_cast<int>(std::get<float>(it->second));
+            }
+        }
+        return defaultValue;
     }
     
     std::string getString(const std::string& key, const std::string& defaultValue = "") const {
-        auto it = strings.find(key);
-        return (it != strings.end()) ? it->second : defaultValue;
+        auto it = properties.find(key);
+        if (it != properties.end()) {
+            if (std::holds_alternative<std::string>(it->second)) {
+                return std::get<std::string>(it->second);
+            }
+        }
+        return defaultValue;
+    }
+    
+    // Generic getter
+    PropertyValue getValue(const std::string& key, const PropertyValue& defaultValue = PropertyValue{}) const {
+        auto it = properties.find(key);
+        return (it != properties.end()) ? it->second : defaultValue;
+    }
+    
+    // Check if property exists
+    bool hasProperty(const std::string& key) const {
+        return properties.find(key) != properties.end();
+    }
+    
+    // Get property type as string
+    std::string getPropertyType(const std::string& key) const {
+        auto it = properties.find(key);
+        if (it != properties.end()) {
+            if (std::holds_alternative<float>(it->second)) return "float";
+            if (std::holds_alternative<int>(it->second)) return "int";
+            if (std::holds_alternative<std::string>(it->second)) return "string";
+        }
+        return "unknown";
+    }
+    
+    // Convert property to string for display
+    std::string getPropertyAsString(const std::string& key) const {
+        auto it = properties.find(key);
+        if (it != properties.end()) {
+            std::ostringstream oss;
+            std::visit([&oss](const auto& value) {
+                if constexpr (std::is_same_v<std::decay_t<decltype(value)>, std::string>) {
+                    oss << "\"" << value << "\"";
+                } else {
+                    oss << value;
+                }
+            }, it->second);
+            return oss.str();
+        }
+        return "";
     }
     
     void clear() {
-        floats.clear();
-        integers.clear();
-        strings.clear();
+        properties.clear();
     }
+    
+    // Helper function to set property from OSC data
+    void setFromOSCData(const std::string& endpoint, 
+                       const std::vector<float>& floats, 
+                       const std::vector<int>& integers, 
+                       const std::vector<std::string>& strings) {
+        if (!floats.empty()) {
+            setFloat(endpoint, floats[0]);
+        } else if (!integers.empty()) {
+            setInt(endpoint, integers[0]);
+        } else if (!strings.empty()) {
+            setString(endpoint, strings[0]);
+        }
+    }
+    
+    // Iterator support for range-based loops
+    auto begin() const { return properties.begin(); }
+    auto end() const { return properties.end(); }
+    auto begin() { return properties.begin(); }
+    auto end() { return properties.end(); }
+    
+    size_t size() const { return properties.size(); }
+    bool empty() const { return properties.empty(); }
 };
 
 class Effect {
@@ -57,16 +145,8 @@ public:
     
     void processOSCMessage(const std::string& address, const std::vector<float>& floats, 
                           const std::vector<int>& integers, const std::vector<std::string>& strings) {
-        // At this level, we just store the property directly
         std::string endpoint = address.substr(1); // Remove leading slash
-        
-        if (!floats.empty()) {
-            properties.setFloat(endpoint, floats[0]);
-        } else if (!integers.empty()) {
-            properties.setInt(endpoint, integers[0]);
-        } else if (!strings.empty()) {
-            properties.setString(endpoint, strings[0]);
-        }
+        properties.setFromOSCData(endpoint, floats, integers, strings);
     }
     
     void clear() {
@@ -115,13 +195,7 @@ public:
             }
             
             // Store other properties in dictionary
-            if (!floats.empty()) {
-                properties.setFloat(endpoint, floats[0]);
-            } else if (!integers.empty()) {
-                properties.setInt(endpoint, integers[0]);
-            } else if (!strings.empty()) {
-                properties.setString(endpoint, strings[0]);
-            }
+            properties.setFromOSCData(endpoint, floats, integers, strings);
             return;
         }
         
@@ -139,7 +213,7 @@ public:
                     // Effect name is at the end
                     std::string effectName = remainder.substr(effectNameStart);
                     auto effect = getOrCreateEffect(effectName);
-                    effect->processOSCMessage("/", floats, integers, strings); // Just a placeholder
+                    effect->processOSCMessage("/", floats, integers, strings);
                 } else {
                     // There's more after the effect name
                     std::string effectName = remainder.substr(effectNameStart, effectNameEnd - effectNameStart);
@@ -153,13 +227,7 @@ public:
         
         // If we get here, store as a general property
         std::string endpoint = address.substr(1); // Remove leading slash
-        if (!floats.empty()) {
-            properties.setFloat(endpoint, floats[0]);
-        } else if (!integers.empty()) {
-            properties.setInt(endpoint, integers[0]);
-        } else if (!strings.empty()) {
-            properties.setString(endpoint, strings[0]);
-        }
+        properties.setFromOSCData(endpoint, floats, integers, strings);
     }
     
     void clear() {
@@ -222,13 +290,7 @@ public:
         if (firstSlash == std::string::npos) {
             // This is a direct property of the layer
             std::string endpoint = address.substr(1); // Remove leading slash
-            if (!floats.empty()) {
-                properties.setFloat(endpoint, floats[0]);
-            } else if (!integers.empty()) {
-                properties.setInt(endpoint, integers[0]);
-            } else if (!strings.empty()) {
-                properties.setString(endpoint, strings[0]);
-            }
+            properties.setFromOSCData(endpoint, floats, integers, strings);
             return;
         }
         
@@ -283,13 +345,7 @@ public:
         
         // If we get here, store as a general layer property
         std::string endpoint = address.substr(1); // Remove leading slash
-        if (!floats.empty()) {
-            properties.setFloat(endpoint, floats[0]);
-        } else if (!integers.empty()) {
-            properties.setInt(endpoint, integers[0]);
-        } else if (!strings.empty()) {
-            properties.setString(endpoint, strings[0]);
-        }
+        properties.setFromOSCData(endpoint, floats, integers, strings);
     }
     
     void clear() {
@@ -329,6 +385,17 @@ private:
             }
         }
         return numStr.empty() ? 0 : std::stoi(numStr);
+    }
+    
+    // Helper function to print properties nicely
+    void printProperties(const PropertyDictionary& props, const std::string& indent) const {
+        if (props.empty()) return;
+        
+        for (const auto& pair : props) {
+            std::cout << indent << "├── " << pair.first << " = " 
+                     << props.getPropertyAsString(pair.first) 
+                     << " (" << props.getPropertyType(pair.first) << ")" << std::endl;
+        }
     }
     
 public:
@@ -455,13 +522,7 @@ public:
         
         // Everything else goes to deck properties
         std::string endpoint = remainder.substr(1); // Remove leading slash
-        if (!floats.empty()) {
-            deckProperties.setFloat(endpoint, floats[0]);
-        } else if (!integers.empty()) {
-            deckProperties.setInt(endpoint, integers[0]);
-        } else if (!strings.empty()) {
-            deckProperties.setString(endpoint, strings[0]);
-        }
+        deckProperties.setFromOSCData(endpoint, floats, integers, strings);
     }
     
     std::shared_ptr<Layer> getLayer(int layerId) {
@@ -540,6 +601,153 @@ public:
         for (auto& layer : layers) {
             layer->clear();
         }
+    }
+    
+    void printStateTree() const {
+        std::cout << "\n========== RESOLUME STATE TREE ==========\n" << std::endl;
+        
+        // Print composition/deck properties
+        std::cout << "COMPOSITION/DECK PROPERTIES:" << std::endl;
+        if (deckProperties.empty()) {
+            std::cout << "  └── (no properties)" << std::endl;
+        } else {
+            printProperties(deckProperties, "  ");
+        }
+        
+        // Print selection state
+        std::cout << "\nSELECTION STATE:" << std::endl;
+        std::cout << "  ├── Selected Column: " << (selectedColumnId ? std::to_string(selectedColumnId) : "none") << std::endl;
+        std::cout << "  ├── Connected Column: " << (connectedColumnId ? std::to_string(connectedColumnId) : "none") << std::endl;
+        std::cout << "  ├── Selected Layer: " << (selectedLayerId ? std::to_string(selectedLayerId) : "none") << std::endl;
+        std::cout << "  ├── Selected Clip: " << (selectedClipLayerId && selectedClipId ? 
+                     "Layer " + std::to_string(selectedClipLayerId) + ", Clip " + std::to_string(selectedClipId) : "none") << std::endl;
+        std::cout << "  └── Last Selection Type: ";
+        switch (lastSelectionType) {
+            case LastSelectionType::NONE: std::cout << "none"; break;
+            case LastSelectionType::LAYER: std::cout << "layer"; break;
+            case LastSelectionType::CLIP: std::cout << "clip"; break;
+        }
+        std::cout << std::endl;
+        
+        // Print layers
+        std::cout << "\n🎬 LAYERS:" << std::endl;
+        bool hasAnyLayerData = false;
+        
+        for (const auto& layer : layers) {
+            bool hasLayerData = !layer->properties.empty() || !layer->effects.empty();
+            
+            // Check if any clips have data
+            bool hasClipData = false;
+            for (const auto& clip : layer->clips) {
+                if (!clip->name.empty() || !clip->properties.empty() || !clip->effects.empty()) {
+                    hasClipData = true;
+                    break;
+                }
+            }
+            
+            if (hasLayerData || hasClipData) {
+                hasAnyLayerData = true;
+                std::string layerPrefix = (layer->id == selectedLayerId) ? "🟢 " : "   ";
+                std::cout << layerPrefix << "Layer " << layer->id << ":" << std::endl;
+                
+                // Print layer properties
+                if (!layer->properties.empty()) {
+                    std::cout << "     ├── Properties:" << std::endl;
+                    printProperties(layer->properties, "     │   ");
+                }
+                
+                // Print layer effects
+                if (!layer->effects.empty()) {
+                    bool isLast = !hasClipData;
+                    std::cout << "     " << (isLast ? "└── " : "├── ") << "Video Effects:" << std::endl;
+                    for (size_t i = 0; i < layer->effects.size(); i++) {
+                        const auto& effect = layer->effects[i];
+                        bool isLastEffect = (i == layer->effects.size() - 1);
+                        std::string effectPrefix = isLastEffect ? "└── " : "├── ";
+                        std::cout << "     " << (isLast ? "    " : "│   ") << effectPrefix << effect->name << ":" << std::endl;
+                        
+                        // Print effect properties
+                        printProperties(effect->properties, "     " + (isLast ? "    " : "│   ") + (isLastEffect ? "    " : "│   "));
+                    }
+                }
+                
+                // Print clips
+                if (hasClipData) {
+                    std::cout << "     └── Clips:" << std::endl;
+                    for (const auto& clip : layer->clips) {
+                        bool hasThisClipData = !clip->name.empty() || !clip->properties.empty() || !clip->effects.empty();
+                        
+                        if (hasThisClipData) {
+                            bool isSelected = (layer->id == selectedClipLayerId && clip->id == selectedClipId);
+                            std::string clipPrefix = isSelected ? "🔵 " : "   ";
+                            std::cout << "         " << clipPrefix << "Clip " << clip->id;
+                            if (!clip->name.empty()) {
+                                std::cout << " (\"" << clip->name << "\")";
+                            }
+                            std::cout << ":" << std::endl;
+                            
+                            // Print clip properties
+                            if (!clip->properties.empty()) {
+                                std::cout << "             ├── Properties:" << std::endl;
+                                printProperties(clip->properties, "             │   ");
+                            }
+                            
+                            // Print clip effects
+                            if (!clip->effects.empty()) {
+                                bool hasProps = !clip->properties.empty();
+                                std::cout << "             " << (hasProps ? "└── " : "└── ") << "Video Effects:" << std::endl;
+                                for (size_t i = 0; i < clip->effects.size(); i++) {
+                                    const auto& effect = clip->effects[i];
+                                    bool isLastEffect = (i == clip->effects.size() - 1);
+                                    std::string effectPrefix = isLastEffect ? "└── " : "├── ";
+                                    std::cout << "                 " << effectPrefix << effect->name << ":" << std::endl;
+                                    
+                                    // Print effect properties
+                                    printProperties(effect->properties, "                 " + (isLastEffect ? "    " : "│   "));
+                                }
+                            }
+                        }
+                    }
+                }
+                std::cout << std::endl;
+            }
+        }
+        
+        if (!hasAnyLayerData) {
+            std::cout << "  └── (no layer data)" << std::endl;
+        }
+        
+        // Print summary statistics
+        int totalLayers = 0, totalClips = 0, totalEffects = 0, totalProperties = 0;
+        
+        for (const auto& layer : layers) {
+            bool hasData = !layer->properties.empty() || !layer->effects.empty();
+            
+            for (const auto& clip : layer->clips) {
+                if (!clip->name.empty() || !clip->properties.empty() || !clip->effects.empty()) {
+                    hasData = true;
+                    totalClips++;
+                    totalEffects += clip->effects.size();
+                    totalProperties += clip->properties.size();
+                }
+            }
+            
+            if (hasData) {
+                totalLayers++;
+                totalEffects += layer->effects.size();
+                totalProperties += layer->properties.size();
+            }
+        }
+        
+        totalProperties += deckProperties.size();
+        
+        std::cout << "\n📊 SUMMARY STATISTICS:" << std::endl;
+        std::cout << "  ├── Active Layers: " << totalLayers << std::endl;
+        std::cout << "  ├── Active Clips: " << totalClips << std::endl;
+        std::cout << "  ├── Total Effects: " << totalEffects << std::endl;
+        std::cout << "  └── Total Properties: " << totalProperties << std::endl;
+        
+        std::cout << "\n==========================================\n" << std::endl;
     }
 };
 

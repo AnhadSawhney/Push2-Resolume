@@ -11,6 +11,9 @@
 #include <thread>
 #include <atomic>
 
+// Push 2 USB (adjust include paths to your install)
+#include "PushUSB.h"
+
 using namespace osc;
 
 class ResolumeOSCListener : public OscPacketListener {
@@ -100,7 +103,14 @@ int main(int argc, char* argv[]) {
     try {
         // Create Resolume tracker
         ResolumeTracker resolumeTracker;
-        
+
+        // Initialize Push 2 connection state and device object
+        bool pushConnected = false;
+        // If you have a Push2 class/object, initialize it here
+        // Example:
+        PushUSB push;
+        // pushConnected = push.isDeviceConnected();
+
         // Create OSC listener
         ResolumeOSCListener listener(resolumeTracker);
         
@@ -126,13 +136,42 @@ int main(int argc, char* argv[]) {
                 break;
             } else if (input == "clear") {
                 resolumeTracker.clearAll();
-                std::cout << "Resolume tracker state cleared." << std::endl;
+                if (pushConnected) {
+                    push.clearAllPads();
+                    push.clearDisplay();
+                }
+                std::cout << "Cleared all state" << std::endl;
             } else if (input == "status") {
                 std::cout << "Tempo controller playing: " << (resolumeTracker.isTempoControllerPlaying() ? "Yes" : "No") << std::endl;
                 std::cout << "Selected layer: " << resolumeTracker.getSelectedLayerId() << std::endl;
-                std::cout << "Selected clip: " << resolumeTracker.getSelectedClipId() << std::endl;
+                auto selectedClip = resolumeTracker.getSelectedClip();
+                std::cout << "Selected clip: layer " << selectedClip.first << ", clip " << selectedClip.second << std::endl;
                 std::cout << "Selected column: " << resolumeTracker.getSelectedColumnId() << std::endl;
-                std::cout << "Selected deck: " << resolumeTracker.getSelectedDeckId() << std::endl;
+                std::cout << "Push 2 connected: " << (pushConnected && push.isDeviceConnected() ? "Yes" : "No") << std::endl;
+            } else if (input == "tree" || input == "print") {
+                resolumeTracker.printStateTree();
+            } else if (input == "test" && pushConnected) {
+                std::cout << "Running Push 2 test..." << std::endl;
+                push.fillDisplay(255, 0, 0); // Red screen
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                push.fillDisplay(0, 255, 0); // Green screen
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                push.fillDisplay(0, 0, 255); // Blue screen
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                push.clearDisplay();
+                std::cout << "Test complete" << std::endl;
+            } else if (input == "help") {
+                std::cout << "\nAvailable commands:" << std::endl;
+                std::cout << "  q/Q      - Quit the program" << std::endl;
+                std::cout << "  clear    - Clear all tracked state" << std::endl;
+                std::cout << "  status   - Show basic status information" << std::endl;
+                std::cout << "  tree     - Print complete state tree" << std::endl;
+                std::cout << "  print    - Same as tree" << std::endl;
+                if (pushConnected) {
+                    std::cout << "  test     - Run Push 2 display test" << std::endl;
+                }
+                std::cout << "  help     - Show this help message" << std::endl;
+                std::cout << std::endl;
             }
         }
         
