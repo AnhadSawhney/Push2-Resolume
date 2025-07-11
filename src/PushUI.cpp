@@ -108,8 +108,8 @@ void PushUI::handlePadPress(int note, int velocity) {
         int gridCol = padIndex % 8;
         int resolumeLayer = gridRow + 1 + layerOffset;
         int resolumeColumn = gridCol + 1 + columnOffset;
-        std::cout << "Pad pressed: Grid(" << gridRow << "," << gridCol << ") -> "
-                  << "Resolume Layer " << resolumeLayer << ", Column " << resolumeColumn << std::endl;
+        //std::cout << "Pad pressed: Grid(" << gridRow << "," << gridCol << ") -> "
+        //          << "Resolume Layer " << resolumeLayer << ", Column " << resolumeColumn << std::endl;
         triggerClip(resolumeLayer, resolumeColumn);
     }
 }

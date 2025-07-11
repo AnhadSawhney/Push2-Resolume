@@ -34,8 +34,9 @@ public:
         osc::OutboundPacketStream p(buffer, 1024);
         p << osc::BeginMessage(address.c_str()) << value << osc::EndMessage;
         socket.Send(p.Data(), p.Size());
-        
+        #ifdef DEBUG_OSC
         std::cout << "OSC: " << address << " " << value << std::endl;
+        #endif
     }
     
     void sendMessage(const std::string& address, int value) override {
@@ -43,8 +44,9 @@ public:
         osc::OutboundPacketStream p(buffer, 1024);
         p << osc::BeginMessage(address.c_str()) << value << osc::EndMessage;
         socket.Send(p.Data(), p.Size());
-        
+        #ifdef DEBUG_OSC
         std::cout << "OSC: " << address << " " << value << std::endl;
+        #endif
     }
     
     void sendMessage(const std::string& address, const std::string& value) override {
@@ -52,8 +54,9 @@ public:
         osc::OutboundPacketStream p(buffer, 1024);
         p << osc::BeginMessage(address.c_str()) << value.c_str() << osc::EndMessage;
         socket.Send(p.Data(), p.Size());
-        
+        #ifdef DEBUG_OSC
         std::cout << "OSC: " << address << " " << value << std::endl;
+        #endif
     }
 };
 
@@ -144,10 +147,30 @@ protected:
 // main()
 // ------------------------
 int main(int argc, char* argv[]) {
-    const int OSC_PORT = 7000;  // Default Resolume OSC port
-    const std::string RESOLUME_IP = "127.0.0.1";  // Localhost
-    const int RESOLUME_PORT = 7000;  // Resolume OSC input port
-    
+    // Defaults
+    int incomingOscPort = 7000; // Default incoming OSC port (listen)
+    std::string resolumeIp = "127.0.0.1"; // Default Resolume IP
+    int resolumeOscPort = 6669; // Default outgoing OSC port (to Resolume)
+
+    // Simple command line parsing
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if ((arg == "--in-port" || arg == "-i") && i + 1 < argc) {
+            incomingOscPort = std::stoi(argv[++i]);
+        } else if ((arg == "--out-port" || arg == "-o") && i + 1 < argc) {
+            resolumeOscPort = std::stoi(argv[++i]);
+        } else if ((arg == "--ip" || arg == "-a") && i + 1 < argc) {
+            resolumeIp = argv[++i];
+        } else if (arg == "--help" || arg == "-h") {
+            std::cout << "Usage: " << argv[0] << " [--in-port <port>] [--out-port <port>] [--ip <address>]" << std::endl;
+            std::cout << "  --in-port,  -i   Incoming OSC port to listen on (default: 6669)" << std::endl;
+            std::cout << "  --out-port, -o   Outgoing OSC port to Resolume (default: 7000)" << std::endl;
+            std::cout << "  --ip,       -a   Resolume IP address (default: 127.0.0.1)" << std::endl;
+            std::cout << "  --help,     -h   Show this help message" << std::endl;
+            return 0;
+        }
+    }
+
     try {
         // Create Resolume tracker
         ResolumeTracker resolumeTracker;
@@ -167,7 +190,7 @@ int main(int argc, char* argv[]) {
         }
 
         // Create OSC sender for sending commands to Resolume
-        auto oscSender = std::make_unique<OSCSenderImpl>(RESOLUME_IP, RESOLUME_PORT);
+        auto oscSender = std::make_unique<OSCSenderImpl>(resolumeIp, resolumeOscPort);
 
         // Create PushUI (only if Push is connected)
         std::unique_ptr<PushUI> pushUI;
@@ -195,11 +218,11 @@ int main(int argc, char* argv[]) {
         }
         
         // Create UDP socket for receiving OSC messages
-        UdpListeningReceiveSocket socket(IpEndpointName(IpEndpointName::ANY_ADDRESS, OSC_PORT), &listener);
-        
+        UdpListeningReceiveSocket socket(IpEndpointName(IpEndpointName::ANY_ADDRESS, incomingOscPort), &listener);
+
         std::cout << "Push2-Resolume Controller starting..." << std::endl;
-        std::cout << "Listening for OSC messages on port " << OSC_PORT << std::endl;
-        std::cout << "Sending OSC messages to " << RESOLUME_IP << ":" << RESOLUME_PORT << std::endl;
+        std::cout << "Listening for OSC messages on port " << incomingOscPort << std::endl;
+        std::cout << "Sending OSC messages to " << resolumeIp << ":" << resolumeOscPort << std::endl;
         std::cout << "Press 'q' + Enter to quit, 'help' for commands" << std::endl;
         
         // Start listening in a separate thread
@@ -242,6 +265,7 @@ int main(int argc, char* argv[]) {
             } else if (input=="refresh") {
                 std::cout << "Forcing Push UI refresh" << std::endl;
                 pushUI->forceRefresh();
+                pushUI->update();
             } else if (input == "help") {
                 std::cout << "\nAvailable commands:" << std::endl;
                 std::cout << "  q/Q      - Quit the program" << std::endl;
@@ -254,6 +278,22 @@ int main(int argc, char* argv[]) {
                 }
                 std::cout << "  help     - Show this help message" << std::endl;
                 std::cout << std::endl;
+            } else if (input == "clipsgrid") {
+                // loop through the first 8 layers and 8 columns and print x if a clip exists else _
+                for (int layer = 1; layer <= 8; ++layer) {
+                    for (int col = 1; col <= 8; ++col) {
+                        if (resolumeTracker.hasClip(col, layer)) {
+                            if (resolumeTracker.isClipPlaying(col, layer)) {
+                                std::cout << "O "; // O for playing clip
+                            } else {
+                                std::cout << "X "; // X for existing clip
+                            }
+                        } else {
+                            std::cout << "_ ";
+                        }
+                    }
+                    std::cout << "  (Layer " << layer << ")" << std::endl;
+                }
             }
         }
         

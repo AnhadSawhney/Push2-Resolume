@@ -18,3 +18,15 @@
 1017	1074	7739101497445011	rtmidi_static.lib	652fdf7216355fa5
 64	153	7739185997142933	CMakeFiles/push2_resolume.dir/src/PushLights.cpp.obj	b825e8313297b66d
 60	2630	7739185997085410	CMakeFiles/push2_resolume.dir/src/PushUI.cpp.obj	50ac33aa7ee112de
+8	4690	7739197383931614	CMakeFiles/push2_resolume.dir/src/push2_resolume.cpp.obj	2663eb7dc4abe2c9
+4691	4906	7739197430756170	push2_resolume.exe	b7511b599ac05be2
+10	3699	7739197771433817	CMakeFiles/push2_resolume.dir/src/push2_resolume.cpp.obj	2663eb7dc4abe2c9
+3700	4005	7739197808341105	push2_resolume.exe	b7511b599ac05be2
+50	3635	7739198314732229	CMakeFiles/push2_resolume.dir/src/push2_resolume.cpp.obj	2663eb7dc4abe2c9
+3636	3932	7739198350586756	push2_resolume.exe	b7511b599ac05be2
+8	2342	7739201543249164	CMakeFiles/push2_resolume.dir/src/PushUI.cpp.obj	50ac33aa7ee112de
+16	2391	7739201543320981	CMakeFiles/push2_resolume.dir/src/push2_resolume.cpp.obj	2663eb7dc4abe2c9
+46	338	7739201664048485	push2_resolume.exe	b7511b599ac05be2
+9	2936	7739203305983206	CMakeFiles/push2_resolume.dir/src/push2_resolume.cpp.obj	2663eb7dc4abe2c9
+47	3341	7739203695648406	CMakeFiles/push2_resolume.dir/src/push2_resolume.cpp.obj	2663eb7dc4abe2c9
+3343	3592	7739203728604395	push2_resolume.exe	b7511b599ac05be2
