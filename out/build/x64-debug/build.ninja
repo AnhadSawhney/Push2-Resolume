@@ -49,9 +49,25 @@ cmake_ninja_workdir = C$:\Users\Anhad\Documents-Unsynced\Push2-Resolume\out\buil
 
 build cmake_object_order_depends_target_push2_resolume: phony || cmake_object_order_depends_target_oscpack cmake_object_order_depends_target_rtmidi_static
 
+build CMakeFiles\push2_resolume.dir\src\PushUI.cpp.obj: CXX_COMPILER__push2_resolume_unscanned_Debug C$:\Users\Anhad\Documents-Unsynced\Push2-Resolume\src\PushUI.cpp || cmake_object_order_depends_target_push2_resolume
+  FLAGS = /DWIN32 /D_WINDOWS /W4 /GR /EHsc /MDd /Ob0 /Od /RTC1 -std:c++20 -ZI
+  INCLUDES = -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\include -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\ip -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\osc -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\src
+  OBJECT_DIR = CMakeFiles\push2_resolume.dir
+  OBJECT_FILE_DIR = CMakeFiles\push2_resolume.dir\src
+  TARGET_COMPILE_PDB = CMakeFiles\push2_resolume.dir\
+  TARGET_PDB = push2_resolume.pdb
+
+build CMakeFiles\push2_resolume.dir\src\PushLights.cpp.obj: CXX_COMPILER__push2_resolume_unscanned_Debug C$:\Users\Anhad\Documents-Unsynced\Push2-Resolume\src\PushLights.cpp || cmake_object_order_depends_target_push2_resolume
+  FLAGS = /DWIN32 /D_WINDOWS /W4 /GR /EHsc /MDd /Ob0 /Od /RTC1 -std:c++20 -ZI
+  INCLUDES = -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\include -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\ip -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\osc -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\src
+  OBJECT_DIR = CMakeFiles\push2_resolume.dir
+  OBJECT_FILE_DIR = CMakeFiles\push2_resolume.dir\src
+  TARGET_COMPILE_PDB = CMakeFiles\push2_resolume.dir\
+  TARGET_PDB = push2_resolume.pdb
+
 build CMakeFiles\push2_resolume.dir\src\push2_resolume.cpp.obj: CXX_COMPILER__push2_resolume_unscanned_Debug C$:\Users\Anhad\Documents-Unsynced\Push2-Resolume\src\push2_resolume.cpp || cmake_object_order_depends_target_push2_resolume
   FLAGS = /DWIN32 /D_WINDOWS /W4 /GR /EHsc /MDd /Ob0 /Od /RTC1 -std:c++20 -ZI
-  INCLUDES = -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\include -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\include\ip -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\include\osc
+  INCLUDES = -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\include -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\ip -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\osc -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\src
   OBJECT_DIR = CMakeFiles\push2_resolume.dir
   OBJECT_FILE_DIR = CMakeFiles\push2_resolume.dir\src
   TARGET_COMPILE_PDB = CMakeFiles\push2_resolume.dir\
@@ -65,7 +81,7 @@ build CMakeFiles\push2_resolume.dir\src\push2_resolume.cpp.obj: CXX_COMPILER__pu
 #############################################
 # Link the executable push2_resolume.exe
 
-build push2_resolume.exe: CXX_EXECUTABLE_LINKER__push2_resolume_Debug CMakeFiles\push2_resolume.dir\src\push2_resolume.cpp.obj | C$:\Users\Anhad\Documents-Unsynced\Push2-Resolume\lib\libusb-1.0.lib rtmidi_static.lib oscpack.lib || oscpack.lib rtmidi_static.lib
+build push2_resolume.exe: CXX_EXECUTABLE_LINKER__push2_resolume_Debug CMakeFiles\push2_resolume.dir\src\PushUI.cpp.obj CMakeFiles\push2_resolume.dir\src\PushLights.cpp.obj CMakeFiles\push2_resolume.dir\src\push2_resolume.cpp.obj | C$:\Users\Anhad\Documents-Unsynced\Push2-Resolume\lib\libusb-1.0.lib rtmidi_static.lib oscpack.lib || oscpack.lib rtmidi_static.lib
   FLAGS = /DWIN32 /D_WINDOWS /W4 /GR /EHsc /MDd /Ob0 /Od /RTC1 -ZI
   LINK_FLAGS = /machine:x64 /debug /INCREMENTAL /subsystem:console
   LINK_LIBRARIES = C:\Users\Anhad\Documents-Unsynced\Push2-Resolume\lib\libusb-1.0.lib  rtmidi_static.lib  winmm.lib  oscpack.lib  Ws2_32.lib  winmm.lib  Ws2_32.lib  kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib
@@ -124,7 +140,7 @@ build cmake_object_order_depends_target_oscpack: phony || .
 
 build CMakeFiles\oscpack.dir\ip\IpEndpointName.cpp.obj: CXX_COMPILER__oscpack_unscanned_Debug C$:\Users\Anhad\Documents-Unsynced\Push2-Resolume\ip\IpEndpointName.cpp || cmake_object_order_depends_target_oscpack
   FLAGS = /DWIN32 /D_WINDOWS /W4 /GR /EHsc /MDd /Ob0 /Od /RTC1 -ZI
-  INCLUDES = -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume
+  INCLUDES = -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\ip -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\osc
   OBJECT_DIR = CMakeFiles\oscpack.dir
   OBJECT_FILE_DIR = CMakeFiles\oscpack.dir\ip
   TARGET_COMPILE_PDB = CMakeFiles\oscpack.dir\oscpack.pdb
@@ -132,7 +148,7 @@ build CMakeFiles\oscpack.dir\ip\IpEndpointName.cpp.obj: CXX_COMPILER__oscpack_un
 
 build CMakeFiles\oscpack.dir\ip\win32\NetworkingUtils.cpp.obj: CXX_COMPILER__oscpack_unscanned_Debug C$:\Users\Anhad\Documents-Unsynced\Push2-Resolume\ip\win32\NetworkingUtils.cpp || cmake_object_order_depends_target_oscpack
   FLAGS = /DWIN32 /D_WINDOWS /W4 /GR /EHsc /MDd /Ob0 /Od /RTC1 -ZI
-  INCLUDES = -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume
+  INCLUDES = -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\ip -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\osc
   OBJECT_DIR = CMakeFiles\oscpack.dir
   OBJECT_FILE_DIR = CMakeFiles\oscpack.dir\ip\win32
   TARGET_COMPILE_PDB = CMakeFiles\oscpack.dir\oscpack.pdb
@@ -140,7 +156,7 @@ build CMakeFiles\oscpack.dir\ip\win32\NetworkingUtils.cpp.obj: CXX_COMPILER__osc
 
 build CMakeFiles\oscpack.dir\ip\win32\UdpSocket.cpp.obj: CXX_COMPILER__oscpack_unscanned_Debug C$:\Users\Anhad\Documents-Unsynced\Push2-Resolume\ip\win32\UdpSocket.cpp || cmake_object_order_depends_target_oscpack
   FLAGS = /DWIN32 /D_WINDOWS /W4 /GR /EHsc /MDd /Ob0 /Od /RTC1 -ZI
-  INCLUDES = -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume
+  INCLUDES = -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\ip -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\osc
   OBJECT_DIR = CMakeFiles\oscpack.dir
   OBJECT_FILE_DIR = CMakeFiles\oscpack.dir\ip\win32
   TARGET_COMPILE_PDB = CMakeFiles\oscpack.dir\oscpack.pdb
@@ -148,7 +164,7 @@ build CMakeFiles\oscpack.dir\ip\win32\UdpSocket.cpp.obj: CXX_COMPILER__oscpack_u
 
 build CMakeFiles\oscpack.dir\osc\OscTypes.cpp.obj: CXX_COMPILER__oscpack_unscanned_Debug C$:\Users\Anhad\Documents-Unsynced\Push2-Resolume\osc\OscTypes.cpp || cmake_object_order_depends_target_oscpack
   FLAGS = /DWIN32 /D_WINDOWS /W4 /GR /EHsc /MDd /Ob0 /Od /RTC1 -ZI
-  INCLUDES = -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume
+  INCLUDES = -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\ip -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\osc
   OBJECT_DIR = CMakeFiles\oscpack.dir
   OBJECT_FILE_DIR = CMakeFiles\oscpack.dir\osc
   TARGET_COMPILE_PDB = CMakeFiles\oscpack.dir\oscpack.pdb
@@ -156,7 +172,7 @@ build CMakeFiles\oscpack.dir\osc\OscTypes.cpp.obj: CXX_COMPILER__oscpack_unscann
 
 build CMakeFiles\oscpack.dir\osc\OscReceivedElements.cpp.obj: CXX_COMPILER__oscpack_unscanned_Debug C$:\Users\Anhad\Documents-Unsynced\Push2-Resolume\osc\OscReceivedElements.cpp || cmake_object_order_depends_target_oscpack
   FLAGS = /DWIN32 /D_WINDOWS /W4 /GR /EHsc /MDd /Ob0 /Od /RTC1 -ZI
-  INCLUDES = -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume
+  INCLUDES = -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\ip -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\osc
   OBJECT_DIR = CMakeFiles\oscpack.dir
   OBJECT_FILE_DIR = CMakeFiles\oscpack.dir\osc
   TARGET_COMPILE_PDB = CMakeFiles\oscpack.dir\oscpack.pdb
@@ -164,7 +180,7 @@ build CMakeFiles\oscpack.dir\osc\OscReceivedElements.cpp.obj: CXX_COMPILER__oscp
 
 build CMakeFiles\oscpack.dir\osc\OscPrintReceivedElements.cpp.obj: CXX_COMPILER__oscpack_unscanned_Debug C$:\Users\Anhad\Documents-Unsynced\Push2-Resolume\osc\OscPrintReceivedElements.cpp || cmake_object_order_depends_target_oscpack
   FLAGS = /DWIN32 /D_WINDOWS /W4 /GR /EHsc /MDd /Ob0 /Od /RTC1 -ZI
-  INCLUDES = -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume
+  INCLUDES = -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\ip -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\osc
   OBJECT_DIR = CMakeFiles\oscpack.dir
   OBJECT_FILE_DIR = CMakeFiles\oscpack.dir\osc
   TARGET_COMPILE_PDB = CMakeFiles\oscpack.dir\oscpack.pdb
@@ -172,7 +188,7 @@ build CMakeFiles\oscpack.dir\osc\OscPrintReceivedElements.cpp.obj: CXX_COMPILER_
 
 build CMakeFiles\oscpack.dir\osc\OscOutboundPacketStream.cpp.obj: CXX_COMPILER__oscpack_unscanned_Debug C$:\Users\Anhad\Documents-Unsynced\Push2-Resolume\osc\OscOutboundPacketStream.cpp || cmake_object_order_depends_target_oscpack
   FLAGS = /DWIN32 /D_WINDOWS /W4 /GR /EHsc /MDd /Ob0 /Od /RTC1 -ZI
-  INCLUDES = -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume
+  INCLUDES = -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\ip -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\osc
   OBJECT_DIR = CMakeFiles\oscpack.dir
   OBJECT_FILE_DIR = CMakeFiles\oscpack.dir\osc
   TARGET_COMPILE_PDB = CMakeFiles\oscpack.dir\oscpack.pdb

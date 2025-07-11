@@ -10,15 +10,26 @@ project("push2_resolume")
 
 INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}")
 
-# Add executable
-file(GLOB_RECURSE SOURCES "src/*.cpp")
-file(GLOB_RECURSE HEADERS "src/*.h")
-add_executable(push2_resolume ${SOURCES} ${HEADERS})
+
+# Add all source files explicitly to avoid missing new .cpp files
+set(SOURCES
+    src/PushUI.cpp
+    src/PushLights.cpp
+    # Add other .cpp files here as needed
+)
+file(GLOB_RECURSE OTHER_SOURCES "src/*.cpp")
+foreach(f ${OTHER_SOURCES})
+    list(FIND SOURCES ${f} idx)
+    if(idx EQUAL -1)
+        list(APPEND SOURCES ${f})
+    endif()
+endforeach()
+add_executable(push2_resolume ${SOURCES})
+
 
 # Add RtMidi as a static library
 add_library(rtmidi_static STATIC 
-    "include/RtMidi.cpp"
-    "include/RtMidi.h"
+    include/RtMidi.cpp
 )
 
 # separate versions of NetworkingUtils.cpp and UdpSocket.cpp are provided for Win32 and POSIX
@@ -49,50 +60,47 @@ ELSE(WIN32)
     target_link_libraries(push2_resolume rtmidi_static asound pthread)
 ENDIF(WIN32)
 
-ADD_LIBRARY(oscpack 
-    ip/IpEndpointName.h
-    ip/IpEndpointName.cpp
-    
-    ip/NetworkingUtils.h
-    ${IpSystemTypePath}/NetworkingUtils.cpp
-    
-    ip/UdpSocket.h
-    ${IpSystemTypePath}/UdpSocket.cpp
 
+# Add oscpack as a static library (headers not needed in sources)
+add_library(oscpack STATIC
+    ip/IpEndpointName.cpp
+    ${IpSystemTypePath}/NetworkingUtils.cpp
+    ${IpSystemTypePath}/UdpSocket.cpp
     ip/PacketListener.h
     ip/TimerListener.h
-
-    osc/OscTypes.h
-    osc/OscTypes.cpp 
+    osc/OscTypes.cpp
     osc/OscHostEndianness.h
     osc/OscException.h
     osc/OscPacketListener.h
     osc/MessageMappingOscPacketListener.h
-    osc/OscReceivedElements.h
     osc/OscReceivedElements.cpp
     osc/OscPrintReceivedElements.h
     osc/OscPrintReceivedElements.cpp
-    osc/OscOutboundPacketStream.h
     osc/OscOutboundPacketStream.cpp
 )
 
 TARGET_LINK_LIBRARIES(push2_resolume oscpack ${LIBS})
+
 
 # Set C++ standard
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET push2_resolume PROPERTY CXX_STANDARD 20)
 endif()
 
+
 # Include directories
 target_include_directories(push2_resolume PRIVATE
-    "${CMAKE_SOURCE_DIR}/include"
-    "${CMAKE_SOURCE_DIR}/include/ip"
-    "${CMAKE_SOURCE_DIR}/include/osc"
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/ip
+    ${CMAKE_SOURCE_DIR}/osc
+    ${CMAKE_SOURCE_DIR}/src
 )
-
-# Include directories for RtMidi
+target_include_directories(oscpack PRIVATE
+    ${CMAKE_SOURCE_DIR}/ip
+    ${CMAKE_SOURCE_DIR}/osc
+)
 target_include_directories(rtmidi_static PRIVATE
-    "${CMAKE_SOURCE_DIR}/include"
+    ${CMAKE_SOURCE_DIR}/include
 )
 
 if(MSVC)

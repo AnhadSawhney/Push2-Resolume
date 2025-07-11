@@ -239,6 +239,9 @@ int main(int argc, char* argv[]) {
                 std::cout << "Push 2 connected: " << (pushConnected && push.isDeviceConnected() ? "Yes" : "No") << std::endl;
             } else if (input == "tree" || input == "print") {
                 resolumeTracker.printStateTree();
+            } else if (input=="refresh") {
+                std::cout << "Forcing Push UI refresh" << std::endl;
+                pushUI->forceRefresh();
             } else if (input == "help") {
                 std::cout << "\nAvailable commands:" << std::endl;
                 std::cout << "  q/Q      - Quit the program" << std::endl;
