@@ -15,49 +15,65 @@ file(GLOB_RECURSE SOURCES "src/*.cpp")
 file(GLOB_RECURSE HEADERS "src/*.h")
 add_executable(push2_resolume ${SOURCES} ${HEADERS})
 
+# Add RtMidi as a static library
+add_library(rtmidi_static STATIC 
+    "include/RtMidi.cpp"
+    "include/RtMidi.h"
+)
+
 # separate versions of NetworkingUtils.cpp and UdpSocket.cpp are provided for Win32 and POSIX
 # the IpSystemTypePath selects the correct ones based on the current platform
 
 IF(WIN32)
- set(IpSystemTypePath ip/win32)
- set(LIBS ${LIBS} Ws2_32 winmm)
- message(STATUS ">>> Windows")
+    set(IpSystemTypePath ip/win32)
+    set(LIBS ${LIBS} Ws2_32 winmm)
+    message(STATUS ">>> Windows")
+    
+    # Configure RtMidi for Windows
+    target_compile_definitions(rtmidi_static PRIVATE __WINDOWS_MM__)
+    
+    # Link libraries
     target_link_libraries(push2_resolume ${CMAKE_CURRENT_SOURCE_DIR}/lib/libusb-1.0.lib)
+    target_link_libraries(push2_resolume rtmidi_static winmm)
+    
 ELSE(WIN32)
- set(IpSystemTypePath ip/posix)
- message(STATUS ">>> Linux")
-  add_library( libusb SHARED IMPORTED )
-  set_target_properties( libusb PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/lib/libusb-1.0.so )
-  target_link_libraries(push2_resolume libusb)
+    set(IpSystemTypePath ip/posix)
+    message(STATUS ">>> Linux")
+    
+    # Configure RtMidi for Linux (ALSA)
+    target_compile_definitions(rtmidi_static PRIVATE __LINUX_ALSA__)
+    
+    add_library( libusb SHARED IMPORTED )
+    set_target_properties( libusb PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/lib/libusb-1.0.so )
+    target_link_libraries(push2_resolume libusb)
+    target_link_libraries(push2_resolume rtmidi_static asound pthread)
 ENDIF(WIN32)
 
 ADD_LIBRARY(oscpack 
+    ip/IpEndpointName.h
+    ip/IpEndpointName.cpp
+    
+    ip/NetworkingUtils.h
+    ${IpSystemTypePath}/NetworkingUtils.cpp
+    
+    ip/UdpSocket.h
+    ${IpSystemTypePath}/UdpSocket.cpp
 
-ip/IpEndpointName.h
-ip/IpEndpointName.cpp
+    ip/PacketListener.h
+    ip/TimerListener.h
 
-ip/NetworkingUtils.h
-${IpSystemTypePath}/NetworkingUtils.cpp
-
-ip/UdpSocket.h
-${IpSystemTypePath}/UdpSocket.cpp
-
-ip/PacketListener.h
-ip/TimerListener.h
-
-osc/OscTypes.h
-osc/OscTypes.cpp 
-osc/OscHostEndianness.h
-osc/OscException.h
-osc/OscPacketListener.h
-osc/MessageMappingOscPacketListener.h
-osc/OscReceivedElements.h
-osc/OscReceivedElements.cpp
-osc/OscPrintReceivedElements.h
-osc/OscPrintReceivedElements.cpp
-osc/OscOutboundPacketStream.h
-osc/OscOutboundPacketStream.cpp
-
+    osc/OscTypes.h
+    osc/OscTypes.cpp 
+    osc/OscHostEndianness.h
+    osc/OscException.h
+    osc/OscPacketListener.h
+    osc/MessageMappingOscPacketListener.h
+    osc/OscReceivedElements.h
+    osc/OscReceivedElements.cpp
+    osc/OscPrintReceivedElements.h
+    osc/OscPrintReceivedElements.cpp
+    osc/OscOutboundPacketStream.h
+    osc/OscOutboundPacketStream.cpp
 )
 
 TARGET_LINK_LIBRARIES(push2_resolume oscpack ${LIBS})
@@ -72,6 +88,11 @@ target_include_directories(push2_resolume PRIVATE
     "${CMAKE_SOURCE_DIR}/include"
     "${CMAKE_SOURCE_DIR}/include/ip"
     "${CMAKE_SOURCE_DIR}/include/osc"
+)
+
+# Include directories for RtMidi
+target_include_directories(rtmidi_static PRIVATE
+    "${CMAKE_SOURCE_DIR}/include"
 )
 
 if(MSVC)

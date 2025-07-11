@@ -111,7 +111,9 @@ int main(int argc, char* argv[]) {
         // If you have a Push2 class/object, initialize it here
         // Example:
         PushUSB push;
-        // pushConnected = push.isDeviceConnected();
+        push.initialize();
+        push.connect();
+        pushConnected = push.isDeviceConnected();
 
         // Create OSC listener
         ResolumeOSCListener listener(resolumeTracker);
@@ -140,7 +142,7 @@ int main(int argc, char* argv[]) {
                 resolumeTracker.clearAll();
                 if (pushConnected) {
                     push.clearAllPads();
-                    push.clearDisplay();
+                    //push.clearDisplay();
                 }
                 std::cout << "Cleared all state" << std::endl;
             } else if (input == "status") {
@@ -154,13 +156,13 @@ int main(int argc, char* argv[]) {
                 resolumeTracker.printStateTree();
             } else if (input == "test" && pushConnected) {
                 std::cout << "Running Push 2 test..." << std::endl;
-                push.fillDisplay(255, 0, 0); // Red screen
+                //push.fillDisplay(255, 0, 0); // Red screen
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
-                push.fillDisplay(0, 255, 0); // Green screen
+                //push.fillDisplay(0, 255, 0); // Green screen
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
-                push.fillDisplay(0, 0, 255); // Blue screen
+                //push.fillDisplay(0, 0, 255); // Blue screen
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
-                push.clearDisplay();
+                //push.clearDisplay();
                 std::cout << "Test complete" << std::endl;
             } else if (input == "help") {
                 std::cout << "\nAvailable commands:" << std::endl;

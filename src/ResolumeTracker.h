@@ -258,6 +258,13 @@ public:
         return nullptr;
     }
     
+    std::shared_ptr<const Clip> getClip(int clipId) const {
+        if (clipId >= 1 && clipId <= clips.size()) {
+            return clips[clipId - 1];
+        }
+        return nullptr;
+    }
+    
     std::shared_ptr<Effect> getOrCreateEffect(const std::string& effectName) {
         // Find existing effect
         for (auto& effect : effects) {
@@ -642,6 +649,13 @@ public:
         return nullptr;
     }
     
+    std::shared_ptr<const Layer> getLayer(int layerId) const {
+        if (layerId >= 1 && layerId <= layers.size()) {
+            return layers[layerId - 1];
+        }
+        return nullptr;
+    }
+    
     // Convenience getters for commonly used values
     bool isTempoControllerPlaying() const { 
         return deckProperties.getInt("tempocontroller/play", 0) == 1;
@@ -871,6 +885,58 @@ public:
         std::cout << "  `-- Total Properties: " << totalProperties << std::endl;
         
         std::cout << "\n==========================================\n" << std::endl;
+    }
+    
+    // Additional convenience methods for PushUI integration
+    bool hasClip(int column, int layer) const {
+        auto layerObj = getLayer(layer + 1);  // Convert 0-based to 1-based
+        if (!layerObj) return false;
+        auto clip = layerObj->getClip(column + 1);  // Convert 0-based to 1-based  
+        return clip && !clip->name.empty();
+    }
+    
+    bool isColumnConnected(int column) const {
+        // Check if any layer has content for this column
+        for (int layer = 0; layer < 8; layer++) {
+            if (hasClip(column, layer)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    bool isClipPlaying(int column, int layer) const {
+        auto layerObj = getLayer(layer + 1);  // Convert 0-based to 1-based
+        if (!layerObj) return false;
+        auto clip = layerObj->getClip(column + 1);  // Convert 0-based to 1-based
+        if (!clip) return false;
+        return clip->properties.getInt("connect", 0) == 1;
+    }
+    
+    bool hasLayerContent(int layer) const {
+        auto layerObj = getLayer(layer + 1);  // Convert 0-based to 1-based
+        if (!layerObj) return false;
+        // Check if layer has any clips
+        for (int col = 0; col < 16; col++) {  // Check up to 16 columns
+            auto clip = layerObj->getClip(col + 1);
+            if (clip && !clip->name.empty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    int getCurrentDeck() const { return currentDeckId; }
+    
+    void update() {
+        // Placeholder for periodic update logic
+        // This could be used to poll for changes or handle timing-based updates
+    }
+    
+    bool hasDeckChanged() {
+        // This would be set by OSC message processing
+        // For now, return false since deck change is handled in processOSCMessage
+        return false;
     }
 };
 
