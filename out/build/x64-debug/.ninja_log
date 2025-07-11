@@ -28,3 +28,5 @@
 1017	1074	7739101497445011	rtmidi_static.lib	652fdf7216355fa5
 86	2538	7739101488148796	CMakeFiles/push2_resolume.dir/src/push2_resolume.cpp.obj	52307c3deb33407f
 2538	2762	7739101512669377	push2_resolume.exe	cb4af7d03b55927d
+6	2518	7739134850375691	CMakeFiles/push2_resolume.dir/src/push2_resolume.cpp.obj	52307c3deb33407f
+2520	2806	7739134875513957	push2_resolume.exe	cb4af7d03b55927d

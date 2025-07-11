@@ -16,6 +16,17 @@ class PropertyDictionary {
 public:
     std::map<std::string, PropertyValue> properties;
     
+    // Print method for trickle-down printing
+    void print(const std::string& indent) const {
+        if (properties.empty()) return;
+        
+        for (const auto& pair : properties) {
+            std::cout << indent << pair.first << " = "
+                      << getPropertyAsString(pair.first)
+                      << " (" << getPropertyType(pair.first) << ")" << std::endl;
+        }
+    }
+    
     void setFloat(const std::string& key, float value) {
         properties[key] = value;
     }
@@ -152,12 +163,22 @@ public:
     void clear() {
         properties.clear();
     }
+    
+    // Print method for trickle-down printing
+    void print(const std::string& indent) const {
+        std::cout << indent << "Effect: " << name << " (ID: " << id << ")" << std::endl;
+        if (!properties.properties.empty()) {
+            std::cout << indent << "  Properties:" << std::endl;
+            properties.print(indent + "    ");
+        }
+    }
 };
 
 class Clip {
 public:
     int id;
     std::string name; // Hardcoded as critically important
+    bool connected = false; // Connection status moved from PropertyDictionary
     PropertyDictionary properties;
     std::vector<std::shared_ptr<Effect>> effects;
     
@@ -191,6 +212,12 @@ public:
             // Handle clip name specially
             if (endpoint == "name" && !strings.empty()) {
                 setName(strings[0]);
+                return;
+            }
+            
+            // Handle connected status specially
+            if (endpoint == "connected" && !integers.empty()) {
+                connected = (integers[0] == 1);
                 return;
             }
             
@@ -232,8 +259,26 @@ public:
     
     void clear() {
         name = "";
+        connected = false;
         properties.clear();
         effects.clear();
+    }
+    
+    // Print method for trickle-down printing
+    void print(const std::string& indent) const {
+        std::cout << indent << "Clip: " << name << " (ID: " << id << ", Connected: " << (connected ? "Yes" : "No") << ")" << std::endl;
+        
+        if (!properties.properties.empty()) {
+            std::cout << indent << "  Properties:" << std::endl;
+            properties.print(indent + "    ");
+        }
+        
+        if (!effects.empty()) {
+            std::cout << indent << "  Effects:" << std::endl;
+            for (const auto& effect : effects) {
+                effect->print(indent + "    ");
+            }
+        }
     }
 };
 
@@ -360,6 +405,30 @@ public:
         effects.clear();
         for (auto& clip : clips) {
             clip->clear();
+        }
+    }
+    
+    // Print method for trickle-down printing
+    void print(const std::string& indent) const {
+        std::cout << indent << "Layer: ID " << id << std::endl;
+        
+        if (!properties.properties.empty()) {
+            std::cout << indent << "  Properties:" << std::endl;
+            properties.print(indent + "    ");
+        }
+        
+        if (!effects.empty()) {
+            std::cout << indent << "  Effects:" << std::endl;
+            for (const auto& effect : effects) {
+                effect->print(indent + "    ");
+            }
+        }
+        
+        if (!clips.empty()) {
+            std::cout << indent << "  Clips:" << std::endl;
+            for (const auto& clip : clips) {
+                clip->print(indent + "    ");
+            }
         }
     }
 };
@@ -889,54 +958,65 @@ public:
     
     // Additional convenience methods for PushUI integration
     bool hasClip(int column, int layer) const {
-        auto layerObj = getLayer(layer + 1);  // Convert 0-based to 1-based
+        auto layerObj = getLayer(layer);
         if (!layerObj) return false;
-        auto clip = layerObj->getClip(column + 1);  // Convert 0-based to 1-based  
-        return clip && !clip->name.empty();
+        auto clipObj = layerObj->getClip(column);
+        return clipObj && !clipObj->name.empty();
     }
     
     bool isColumnConnected(int column) const {
-        // Check if any layer has content for this column
-        for (int layer = 0; layer < 8; layer++) {
-            if (hasClip(column, layer)) {
-                return true;
-            }
-        }
-        return false;
+        return getConnectedColumnId() == column;
     }
     
     bool isClipPlaying(int column, int layer) const {
-        auto layerObj = getLayer(layer + 1);  // Convert 0-based to 1-based
+        auto layerObj = getLayer(layer);
         if (!layerObj) return false;
-        auto clip = layerObj->getClip(column + 1);  // Convert 0-based to 1-based
-        if (!clip) return false;
-        return clip->properties.getInt("connect", 0) == 1;
+        auto clipObj = layerObj->getClip(column);
+        return clipObj && clipObj->connected;
     }
     
     bool hasLayerContent(int layer) const {
-        auto layerObj = getLayer(layer + 1);  // Convert 0-based to 1-based
+        auto layerObj = getLayer(layer);
         if (!layerObj) return false;
+        
         // Check if layer has any clips
-        for (int col = 0; col < 16; col++) {  // Check up to 16 columns
-            auto clip = layerObj->getClip(col + 1);
-            if (clip && !clip->name.empty()) {
+        for (int i = 1; i <= 32; i++) {  // Check reasonable number of clips
+            auto clipObj = layerObj->getClip(i);
+            if (clipObj && !clipObj->name.empty()) {
                 return true;
             }
         }
         return false;
     }
     
-    int getCurrentDeck() const { return currentDeckId; }
-    
-    void update() {
-        // Placeholder for periodic update logic
-        // This could be used to poll for changes or handle timing-based updates
+    int getCurrentDeck() const {
+        // Return current deck number (implement based on your tracker)
+        return 1;  // Placeholder
     }
     
     bool hasDeckChanged() {
-        // This would be set by OSC message processing
-        // For now, return false since deck change is handled in processOSCMessage
-        return false;
+        // Return true if deck has changed since last check
+        return false;  // Placeholder
+    }
+    
+    // Print method for trickle-down printing
+    void print(const std::string& indent = "") const {
+        std::cout << indent << "ResolumeTracker:" << std::endl;
+        std::cout << indent << "  Current Deck: " << currentDeckId << " (Initialized: " << (deckInitialized ? "Yes" : "No") << ")" << std::endl;
+        std::cout << indent << "  Selected Column: " << selectedColumnId << ", Connected Column: " << connectedColumnId << std::endl;
+        std::cout << indent << "  Selected Layer: " << selectedLayerId << ", Selected Clip: " << selectedClipId << " (Layer " << selectedClipLayerId << ")" << std::endl;
+        
+        if (!deckProperties.properties.empty()) {
+            std::cout << indent << "  Deck Properties:" << std::endl;
+            deckProperties.print(indent + "    ");
+        }
+        
+        if (!layers.empty()) {
+            std::cout << indent << "  Layers:" << std::endl;
+            for (const auto& layer : layers) {
+                layer->print(indent + "    ");
+            }
+        }
     }
 };
 
