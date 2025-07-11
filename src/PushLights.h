@@ -11,17 +11,43 @@ class PushLights {
 private:
     PushUSB& pushDevice;
     PushUI* parentUI;
-    
-    // Push 2 pad layout constants
     static const int PAD_ROWS = 8;
     static const int PAD_COLS = 8;
     static const int FIRST_PAD_NOTE = 36;
-    // State tracking to avoid unnecessary MIDI messages
-        // Make sure Color is declared or included before this line
-        std::map<int, Color> currentPadColors;     // Note -> current color
-        std::map<int, uint8_t> currentButtonColors; // Controller -> current color index
-        bool lightsInitialized;
-    //bool lightsInitialized;
+    std::map<int, Color> currentPadColors;
+    std::map<int, uint8_t> currentButtonColors;
+    bool lightsInitialized;
+
+    // Palette management
+    // Default palette indices for Push 2 (see Ableton spec)
+    static constexpr uint8_t PALETTE_BLACK = 0;
+    static constexpr uint8_t PALETTE_WHITE = 122;
+    static constexpr uint8_t PALETTE_GREEN = 126;
+    static constexpr uint8_t PALETTE_BLUE  = 125;
+    static constexpr uint8_t PALETTE_RED   = 127;
+    // For buttons, 127 is white for white LEDs
+
+    // Map RGB colors to palette indices (for custom colors)
+    std::map<uint32_t, uint8_t> rgbToPaletteIndex;
+    uint8_t nextCustomPaletteIndex = 10; // Start at 10, avoid 0 and high reserved values
+
+    // Helper to get palette index for a Color (returns default if not found)
+    uint8_t getPaletteIndexForColor(const Color& color) {
+        if (color.r == 0 && color.g == 0 && color.b == 0) return PALETTE_BLACK;
+        if (color.r == 255 && color.g == 255 && color.b == 255) return PALETTE_WHITE;
+        if (color.r == 0 && color.g == 255 && color.b == 0) return PALETTE_GREEN;
+        if (color.r == 0 && color.g == 0 && color.b == 255) return PALETTE_BLUE;
+        if (color.r == 255 && color.g == 0 && color.b == 0) return PALETTE_RED;
+        // Custom color: pack RGB into uint32_t
+        uint32_t rgb = (color.r << 16) | (color.g << 8) | color.b;
+        auto it = rgbToPaletteIndex.find(rgb);
+        if (it != rgbToPaletteIndex.end()) return it->second;
+        // Assign new palette index and send sysex
+        uint8_t idx = nextCustomPaletteIndex++;
+        rgbToPaletteIndex[rgb] = idx;
+        pushDevice.setPaletteEntry(idx, color.r, color.g, color.b);
+        return idx;
+    }
     
 public:
     PushLights(PushUSB& push) : pushDevice(push), parentUI(nullptr), lightsInitialized(false) {}
@@ -31,16 +57,13 @@ public:
     // Set pad RGB color using note number (only sends if changed)
     void setPadColor(int note, const Color& color) {
         if (note < FIRST_PAD_NOTE || note > FIRST_PAD_NOTE + 63) return;
-        
-        // Check if color has actually changed
         auto it = currentPadColors.find(note);
-        if (it != currentPadColors.end() && 
+        if (it != currentPadColors.end() &&
             it->second.r == color.r && it->second.g == color.g && it->second.b == color.b) {
-            return; // Color hasn't changed, skip MIDI message
+            return;
         }
-        
-        // Color has changed, send MIDI and update state
-        pushDevice.setPadColor(note, color.r, color.g, color.b);
+        uint8_t paletteIdx = getPaletteIndexForColor(color);
+        pushDevice.setPadColor(note, paletteIdx, paletteIdx, paletteIdx); // Use palette index for all channels
         currentPadColors[note] = color;
     }
     
@@ -54,13 +77,10 @@ public:
     
     // Set button color using control change (only sends if changed)
     void setButtonColor(int controller, uint8_t colorIndex) {
-        // Check if color has actually changed
         auto it = currentButtonColors.find(controller);
         if (it != currentButtonColors.end() && it->second == colorIndex) {
-            return; // Color hasn't changed, skip MIDI message
+            return;
         }
-        
-        // Color has changed, send MIDI and update state
         pushDevice.setButtonColor(controller, colorIndex);
         currentButtonColors[controller] = colorIndex;
     }
@@ -114,7 +134,6 @@ public:
         for (int i = 0; i < 8; ++i) {
             int cc = 20 + i;
             int column = parentUI->getColumnOffset() + i + 1; // 1-based column
-            // If any clip in this column is playing, light white, else rainbow
             bool connected = false;
             for (int layer = 1; layer <= 32; ++layer) {
                 if (parentUI->getResolumeTracker().isClipPlaying(column, layer)) {
@@ -123,50 +142,36 @@ public:
                 }
             }
             if (connected) {
-                setButtonColor(cc, 127); // White (full brightness)
+                setButtonColor(cc, PALETTE_WHITE); // White (palette index)
             } else {
-                // Rainbow: evenly spaced hues
+                // Rainbow: evenly spaced hues, mapped to palette
                 float hue = (float)i * 360.0f / 8.0f;
                 Color c = Color::fromHSV(hue, 1.0f, 1.0f);
-                // Map to MIDI color index: use red/green/blue channels, pick the brightest
-                // But Push 2 supports RGB, so if your setButtonColor supports RGB, use it. Otherwise, use green for demo.
-                // Here, we use green for demo (MIDI index 60 = green, 5 = red, 9 = yellow, etc.)
-                // But for now, just use 5 + i*10 for a color gradient, or always 60 (green)
-                // If you have RGB support, you could add setButtonColorRGB.
-                setButtonColor(cc, 5 + i * 10); // crude color ramp
+                setButtonColor(cc, getPaletteIndexForColor(c));
             }
         }
         // Layer buttons: cc36-cc43, always white
         for (int i = 0; i < 8; ++i) {
             int cc = 36 + i;
-            setButtonColor(cc, 127); // White (full brightness)
+            setButtonColor(cc, PALETTE_WHITE);
         }
     }
     
     // Update grid lighting based on clips
     void updateGridLights() {
         if (!parentUI) return;
-        
         for (int gridRow = 0; gridRow < 8; gridRow++) {
             for (int gridCol = 0; gridCol < 8; gridCol++) {
-                // Convert grid position to Resolume layer/column
-                int resolumeLayer = gridRow + 1 + parentUI->layerOffset;  // Bottom row = layer 1
-                int resolumeColumn = gridCol + 1 + parentUI->columnOffset;       // Left col = column 1
-                
-                Color padColor = Color::BLACK; // Default: no clip
-                
-                // Check if clip exists
+                int resolumeLayer = gridRow + 1 + parentUI->layerOffset;
+                int resolumeColumn = gridCol + 1 + parentUI->columnOffset;
+                Color padColor = Color::BLACK;
                 if (parentUI->resolumeTracker.hasClip(resolumeColumn, resolumeLayer)) {
-                    //std::cout << "Clip exists at Layer " << resolumeLayer << ", Column " << resolumeColumn << std::endl;
-                    // Check if clip is connected (playing)
                     if (parentUI->resolumeTracker.isClipPlaying(resolumeColumn, resolumeLayer)) {
-                        padColor = Color::GREEN; // Connected/playing clip
+                        padColor = Color::GREEN;
                     } else {
-                        padColor = Color::WHITE; // Available but not playing clip
+                        padColor = Color::WHITE;
                     }
                 }
-                
-                // setPadColor will only send MIDI if the color has changed
                 setPadColor(gridRow, gridCol, padColor);
             }
         }

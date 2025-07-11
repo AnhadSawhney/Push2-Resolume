@@ -14,7 +14,6 @@ INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}")
 # Add all source files explicitly to avoid missing new .cpp files
 set(SOURCES
     src/PushUI.cpp
-    src/PushLights.cpp
     # Add other .cpp files here as needed
 )
 file(GLOB_RECURSE OTHER_SOURCES "src/*.cpp")

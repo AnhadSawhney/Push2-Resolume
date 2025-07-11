@@ -57,14 +57,6 @@ build CMakeFiles\push2_resolume.dir\src\PushUI.cpp.obj: CXX_COMPILER__push2_reso
   TARGET_COMPILE_PDB = CMakeFiles\push2_resolume.dir\
   TARGET_PDB = push2_resolume.pdb
 
-build CMakeFiles\push2_resolume.dir\src\PushLights.cpp.obj: CXX_COMPILER__push2_resolume_unscanned_Debug C$:\Users\Anhad\Documents-Unsynced\Push2-Resolume\src\PushLights.cpp || cmake_object_order_depends_target_push2_resolume
-  FLAGS = /DWIN32 /D_WINDOWS /W4 /GR /EHsc /MDd /Ob0 /Od /RTC1 -std:c++20 -ZI
-  INCLUDES = -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\include -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\ip -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\osc -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\src
-  OBJECT_DIR = CMakeFiles\push2_resolume.dir
-  OBJECT_FILE_DIR = CMakeFiles\push2_resolume.dir\src
-  TARGET_COMPILE_PDB = CMakeFiles\push2_resolume.dir\
-  TARGET_PDB = push2_resolume.pdb
-
 build CMakeFiles\push2_resolume.dir\src\push2_resolume.cpp.obj: CXX_COMPILER__push2_resolume_unscanned_Debug C$:\Users\Anhad\Documents-Unsynced\Push2-Resolume\src\push2_resolume.cpp || cmake_object_order_depends_target_push2_resolume
   FLAGS = /DWIN32 /D_WINDOWS /W4 /GR /EHsc /MDd /Ob0 /Od /RTC1 -std:c++20 -ZI
   INCLUDES = -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\include -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\ip -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\osc -IC:\Users\Anhad\Documents-Unsynced\Push2-Resolume\src
@@ -81,7 +73,7 @@ build CMakeFiles\push2_resolume.dir\src\push2_resolume.cpp.obj: CXX_COMPILER__pu
 #############################################
 # Link the executable push2_resolume.exe
 
-build push2_resolume.exe: CXX_EXECUTABLE_LINKER__push2_resolume_Debug CMakeFiles\push2_resolume.dir\src\PushUI.cpp.obj CMakeFiles\push2_resolume.dir\src\PushLights.cpp.obj CMakeFiles\push2_resolume.dir\src\push2_resolume.cpp.obj | C$:\Users\Anhad\Documents-Unsynced\Push2-Resolume\lib\libusb-1.0.lib rtmidi_static.lib oscpack.lib || oscpack.lib rtmidi_static.lib
+build push2_resolume.exe: CXX_EXECUTABLE_LINKER__push2_resolume_Debug CMakeFiles\push2_resolume.dir\src\PushUI.cpp.obj CMakeFiles\push2_resolume.dir\src\push2_resolume.cpp.obj | C$:\Users\Anhad\Documents-Unsynced\Push2-Resolume\lib\libusb-1.0.lib rtmidi_static.lib oscpack.lib || oscpack.lib rtmidi_static.lib
   FLAGS = /DWIN32 /D_WINDOWS /W4 /GR /EHsc /MDd /Ob0 /Od /RTC1 -ZI
   LINK_FLAGS = /machine:x64 /debug /INCREMENTAL /subsystem:console
   LINK_LIBRARIES = C:\Users\Anhad\Documents-Unsynced\Push2-Resolume\lib\libusb-1.0.lib  rtmidi_static.lib  winmm.lib  oscpack.lib  Ws2_32.lib  winmm.lib  Ws2_32.lib  kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib

@@ -43,21 +43,21 @@
 				{
 					"directoryIndex" : 0,
 					"id" : "oscpack::@6890427a1f51a3e7e1df",
-					"jsonFile" : "target-oscpack-Debug-80beea343f0495255a41.json",
+					"jsonFile" : "target-oscpack-Debug-394585bca273e9d115a6.json",
 					"name" : "oscpack",
 					"projectIndex" : 0
 				},
 				{
 					"directoryIndex" : 0,
 					"id" : "push2_resolume::@6890427a1f51a3e7e1df",
-					"jsonFile" : "target-push2_resolume-Debug-eb41ca23683fcabece10.json",
+					"jsonFile" : "target-push2_resolume-Debug-fc5a26c3bb4232a0936d.json",
 					"name" : "push2_resolume",
 					"projectIndex" : 0
 				},
 				{
 					"directoryIndex" : 0,
 					"id" : "rtmidi_static::@6890427a1f51a3e7e1df",
-					"jsonFile" : "target-rtmidi_static-Debug-6b8a0791100799bd51fe.json",
+					"jsonFile" : "target-rtmidi_static-Debug-995e10d1acd283611abc.json",
 					"name" : "rtmidi_static",
 					"projectIndex" : 0
 				}

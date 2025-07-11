@@ -1,5 +1,4 @@
-#ifndef PUSH_USB_H
-#define PUSH_USB_H
+#pragma once
 
 #include "RtMidi.h"
 #include <vector>
@@ -202,6 +201,17 @@ public:
     bool sendSysEx(const std::vector<uint8_t>& sysex) {
         return sendMidiMessage(sysex);
     }
+
+    // Send Push 2 palette sysex command
+    void setPaletteEntry(uint8_t index, uint8_t r, uint8_t g, uint8_t b) {
+        // Ableton Push 2 palette sysex format:
+        // F0 00 21 1D 01 01 03 00 <index> <r> <g> <b> F7
+        std::vector<uint8_t> sysex = {
+            0xF0, 0x00, 0x21, 0x1D, 0x01, 0x01, 0x03, 0x00,
+            index, r, g, b, 0xF7
+        };
+        sendSysEx(sysex);
+    }
     
     // Set pad RGB color (note numbers 36-99 as per documentation)
     bool setPadColor(int padNote, uint8_t red, uint8_t green, uint8_t blue) {
@@ -263,5 +273,3 @@ public:
         return true;
     }
 };
-
-#endif // PUSH_USB_H
