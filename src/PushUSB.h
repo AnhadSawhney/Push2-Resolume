@@ -213,38 +213,21 @@ public:
         sendSysEx(sysex);
     }
     
-    // Set pad RGB color (note numbers 36-99 as per documentation)
-    bool setPadColor(int padNote, uint8_t red, uint8_t green, uint8_t blue) {
-        if (!isConnected.load() || padNote < 36 || padNote > 99) {
+    bool setPadColorIndex(int padNumber, uint8_t colorIndex) {
+        if (!isConnected.load() || padNumber < 36 || padNumber > 99) {
             return false;
         }
-        
-        // Use SysEx to set RGB color (from Ableton documentation)
-        std::vector<uint8_t> sysex = {
-            0xF0, 0x00, 0x21, 0x1D, 0x01, 0x01, 0x03, // Set LED Color Palette Entry
-            0x7F, // Color index 127 (temporary)
-            static_cast<uint8_t>(red >> 1), 0x00,     // Red (7+1 bits)
-            static_cast<uint8_t>(green >> 1), 0x00,   // Green (7+1 bits) 
-            static_cast<uint8_t>(blue >> 1), 0x00,    // Blue (7+1 bits)
-            0x00, 0x00,           // White (unused)
-            0xF7
-        };
-        
-        if (!sendSysEx(sysex)) {
-            return false;
-        }
-        
-        // Send note on with color index 127
-        return sendMidiMessage({0x90, static_cast<uint8_t>(padNote), 0x7F});
+
+        return sendMidiMessage({0x90, static_cast<uint8_t>(padNumber), colorIndex});
     }
-    
+
     // Set button color (control change)
-    bool setButtonColor(int controller, uint8_t colorIndex) {
+    bool setButtonColorIndex(int buttonNumber, uint8_t colorIndex) {
         if (!isConnected.load()) {
             return false;
         }
-        
-        return sendMidiMessage({0xB0, static_cast<uint8_t>(controller), colorIndex});
+
+        return sendMidiMessage({0xB0, static_cast<uint8_t>(buttonNumber), colorIndex});
     }
     
     // Clear all pads
@@ -254,22 +237,5 @@ public:
             success &= sendMidiMessage({0x90, static_cast<uint8_t>(note), 0x00});
         }
         return success;
-    }
-    
-    // Test function to light up some pads
-    bool testLighting() {
-        std::cout << "Testing Push 2 lighting..." << std::endl;
-        
-        // Light up corner pads in different colors
-        setPadColor(36, 255, 0, 0);    // Bottom-left: Red
-        setPadColor(43, 0, 255, 0);    // Bottom-right: Green  
-        setPadColor(92, 0, 0, 255);    // Top-left: Blue
-        setPadColor(99, 255, 255, 0);  // Top-right: Yellow
-        
-        // Light up some buttons
-        setButtonColor(85, 127);  // Play button
-        setButtonColor(86, 64);   // Record button
-        
-        return true;
     }
 };
