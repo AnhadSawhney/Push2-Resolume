@@ -24,39 +24,25 @@ private:
     uint8_t currentButtonPaletteIndices[120] = {0};
     bool lightsInitialized;
 
-    // Pre-populate rgbPalette with standard colors
-    std::map<uint32_t, uint8_t> rgbPalette = {
-        {0x000000, PALETTE_BLACK},                  // black
-        {0xFFFFFF, PALETTE_RGB_WHITE},                  // white
-        {0x00FF00, 126},                  // green
-        {0x0000FF, 125},                   // blue
-        {0xFF0000, 127}                     // red
+    // Unified palette: index -> {r,g,b,w}
+    struct PaletteEntry {
+        uint8_t r, g, b, w;
     };
+
+    std::map<uint8_t, PaletteEntry> palette = {
+        {PALETTE_BLACK,        {0, 0, 0, 0}},        // black
+        {16,                  {0,0,0,32}},           // dark gray
+        {48,                  {0,0,0,84}},           // light gray
+        {PALETTE_RGB_WHITE,   {204, 204, 204, 0}},   // white
+        {123,                 {64, 64, 64, 0}},      // rgb light gray
+        {124,                 {20, 20, 20, 0}},      // rgb dark gray
+        {125,                 {0, 0, 255, 0}},       // blue
+        {126,                 {0, 255, 0, 0}},       // green
+        {PALETTE_BW_WHITE,    {255, 0, 0, 128}}      // rgb red, bw white
+    };
+    
     uint8_t nextCustomPaletteIndex = 10; // Start at 10, avoid 0 and high reserved values
     static constexpr uint8_t MAX_CUSTOM_PALETTE_INDEX = 121; // 122+ reserved
-
-    // BW palette: map brightness (0-128) to palette index
-    std::map<uint8_t, uint8_t> bwPalette = {
-        {0, PALETTE_BLACK},        // black
-        {32, 16},      // dark gray
-        {84, 48},      // light gray
-        {128, PALETTE_BW_WHITE}     // white
-    };
-
-    // Helper to get palette index for a Color (returns default if not found)
-    uint8_t getRGBPaletteIndex(const Color& color) {
-        uint32_t rgb = (color.r << 16) | (color.g << 8) | color.b;
-        auto it = rgbPalette.find(rgb);
-        if (it != rgbPalette.end()) return it->second;
-        if (nextCustomPaletteIndex > MAX_CUSTOM_PALETTE_INDEX) {
-            std::cerr << "PushLights: Out of palette indices for custom colors!" << std::endl;
-            return 0;
-        }
-        uint8_t idx = nextCustomPaletteIndex++;
-        rgbPalette[rgb] = idx;
-        pushDevice.setPaletteEntry(idx, color.r, color.g, color.b);
-        return idx;
-    }
 
     // Helper: is this button RGB?
     static inline bool isRGBButton(int cc) {
@@ -68,24 +54,74 @@ private:
             cc == 85 || cc == 86 || cc == 89;
     }
 
-    // Helper: get BW palette index for brightness (0-128)
+    // Helper: get nearest palette index for BW brightness (0-128)
     uint8_t getBWPaletteIndex(uint8_t brightness) {
-        // Use nearest match from bwPalette
-        uint8_t bestIdx = 0;
-        int bestDist = 999;
-        for (const auto& kv : bwPalette) {
-            int dist = std::abs((int)kv.first - (int)brightness);
-            if (dist < bestDist) {
-                bestDist = dist;
-                bestIdx = kv.second;
+        // Search for an entry with matching w (ignore r,g,b)
+        for (const auto& kv : palette) {
+            if (kv.second.w == brightness) {
+                return kv.first;
             }
         }
-        return bestIdx;
+        // Not found: find first available/unused index (0-121)
+        for (uint8_t idx = 0; idx <= MAX_CUSTOM_PALETTE_INDEX; ++idx) {
+            if (palette.find(idx) == palette.end()) {
+                PaletteEntry entry = {0, 0, 0, brightness};
+                palette[idx] = entry;
+                pushDevice.setPaletteEntry(idx, entry.r, entry.g, entry.b, entry.w);
+                return idx;
+            }
+        }
+        std::cerr << "PushLights: Out of palette indices for custom BW values!" << std::endl;
+        return 0;
+    }
+
+    // Unified: get or create palette index for RGB color, preserving W if already present
+    uint8_t getRGBPaletteIndex(const Color& color) {
+        // Search for an entry with matching r,g,b (ignore w)
+        for (const auto& kv : palette) {
+            if (kv.second.r == color.r && kv.second.g == color.g && kv.second.b == color.b) {
+                return kv.first;
+            }
+        }
+        // Not found: find first available/unused index (0-121)
+        for (uint8_t idx = 0; idx <= MAX_CUSTOM_PALETTE_INDEX; ++idx) {
+            if (palette.find(idx) == palette.end()) {
+                PaletteEntry entry = {color.r, color.g, color.b, 0};
+                palette[idx] = entry;
+                pushDevice.setPaletteEntry(idx, entry.r, entry.g, entry.b, entry.w);
+                return idx;
+            }
+        }
+        std::cerr << "PushLights: Out of palette indices for custom RGB values!" << std::endl;
+        return 0;
+    }
+
+    // Set the white part of a palette entry, preserving RGB if present
+    void setPaletteEntryWhite(uint8_t idx, uint8_t w) {
+        PaletteEntry entry = {0, 0, 0, w};
+        auto it = palette.find(idx);
+        if (it != palette.end()) {
+            entry.r = it->second.r;
+            entry.g = it->second.g;
+            entry.b = it->second.b;
+        }
+        palette[idx] = entry;
+        pushDevice.setPaletteEntry(idx, entry.r, entry.g, entry.b, entry.w);
+    }
+
+    // Set the RGB part of a palette entry, preserving W if present
+    void setPaletteEntryRGB(uint8_t idx, uint8_t r, uint8_t g, uint8_t b) {
+        PaletteEntry entry = {r, g, b, 0};
+        auto it = palette.find(idx);
+        if (it != palette.end()) {
+            entry.w = it->second.w;
+        }
+        palette[idx] = entry;
+        pushDevice.setPaletteEntry(idx, entry.r, entry.g, entry.b, entry.w);
     }
 
 public:
     PushLights(PushUSB& push) : pushDevice(push), parentUI(nullptr), lightsInitialized(false) {
-        // Initialize all pad palette indices to black
         for (int i = 0; i < 64; ++i) currentPadPaletteIndices[i] = PALETTE_BLACK;
         for (int i = 0; i < 120; ++i) currentButtonPaletteIndices[i] = 0;
     }
@@ -120,6 +156,8 @@ public:
             return;
         }
         uint8_t paletteIdx = getBWPaletteIndex(brightness);
+        // Set the white part of the palette entry, preserving RGB
+        setPaletteEntryWhite(paletteIdx, brightness);
         if (currentButtonPaletteIndices[cc] == paletteIdx) return;
         pushDevice.setButtonColorIndex(cc, paletteIdx);
         currentButtonPaletteIndices[cc] = paletteIdx;
@@ -133,6 +171,8 @@ public:
             return;
         }
         uint8_t paletteIdx = getRGBPaletteIndex(color);
+        // Set the RGB part of the palette entry, preserving W
+        setPaletteEntryRGB(paletteIdx, color.r, color.g, color.b);
         if (currentButtonPaletteIndices[cc] == paletteIdx) return;
         pushDevice.setButtonColorIndex(cc, paletteIdx);
         currentButtonPaletteIndices[cc] = paletteIdx;
@@ -212,7 +252,9 @@ public:
                 Color padColor = Color::BLACK;
                 if (parentUI->resolumeTracker.hasClip(resolumeColumn, resolumeLayer)) {
                     if (parentUI->resolumeTracker.isClipPlaying(resolumeColumn, resolumeLayer)) {
-                        padColor = Color::GREEN;
+                        // Lit up according to column number (rainbow)
+                        float hue = (float)(resolumeColumn - 1) * 360.0f / 8.0f;
+                        padColor = Color::fromHSV(hue, 1.0f, 1.0f);
                     } else {
                         padColor = Color::WHITE;
                     }

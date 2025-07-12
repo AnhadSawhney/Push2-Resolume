@@ -202,15 +202,35 @@ public:
         return sendMidiMessage(sysex);
     }
 
-    // Send Push 2 palette sysex command
-    void setPaletteEntry(uint8_t index, uint8_t r, uint8_t g, uint8_t b) {
-        // Ableton Push 2 palette sysex format:
-        // F0 00 21 1D 01 01 03 00 <index> <r> <g> <b> F7
+    void reapplyPalette() {
         std::vector<uint8_t> sysex = {
-            0xF0, 0x00, 0x21, 0x1D, 0x01, 0x01, 0x03, 0x00,
-            index, r, g, b, 0xF7
+            0xF0, 0x00, 0x21, 0x1D, 0x01, 0x01, 0x05, 0xF7
         };
         sendSysEx(sysex);
+    }
+
+    // Send Push 2 palette sysex command
+    void setPaletteEntry(uint8_t index, uint8_t r, uint8_t g, uint8_t b, uint8_t w) {
+        // Split each color into LSB (7 bits) and MSB (1 bit)
+        auto split = [](uint8_t v) -> std::pair<uint8_t, uint8_t> {
+            return { static_cast<uint8_t>(v & 0x7F), static_cast<uint8_t>((v >> 7) & 0x01) };
+        };
+        auto [r_lsb, r_msb] = split(r);
+        auto [g_lsb, g_msb] = split(g);
+        auto [b_lsb, b_msb] = split(b);
+        auto [w_lsb, w_msb] = split(w);
+
+        std::vector<uint8_t> sysex = {
+            0xF0, 0x00, 0x21, 0x1D, 0x01, 0x01, 0x03, // header + command
+            index,
+            r_lsb, r_msb,
+            g_lsb, g_msb,
+            b_lsb, b_msb,
+            w_lsb, w_msb,
+            0xF7
+        };
+        sendSysEx(sysex);
+        reapplyPalette();
     }
     
     bool setPadColorIndex(int padNumber, uint8_t colorIndex) {
@@ -237,5 +257,73 @@ public:
             success &= sendMidiMessage({0x90, static_cast<uint8_t>(note), 0x00});
         }
         return success;
+    }
+
+    // Get palette entry from Push 2 (blocking, returns true if reply received)
+    bool getPaletteEntry(uint8_t index, uint8_t& r, uint8_t& g, uint8_t& b, uint8_t& w) {
+        // Send sysex request: F0 00 21 1D 01 01 04 00 <index> F7
+        std::vector<uint8_t> sysex = {
+            0xF0, 0x00, 0x21, 0x1D, 0x01, 0x01, 0x04, 0x00, index, 0xF7
+        };
+
+        // We'll need to capture the reply. This is a blocking call and not thread safe.
+        // In a real implementation, this should be async/event-driven.
+        std::atomic<bool> gotReply{false};
+        uint8_t replyR = 0, replyG = 0, replyB = 0, replyW = 0;
+
+        auto oldCallback = midiCallback;
+        midiCallback = [&](const PushMidiMessage& msg) {
+            // Expect: F0 00 21 1D 01 01 04 00 <index> r g b w F7
+            if (msg.data.size() >= 13 &&
+                msg.data[0] == 0xF0 && msg.data[1] == 0x00 && msg.data[2] == 0x21 &&
+                msg.data[3] == 0x1D && msg.data[4] == 0x01 && msg.data[5] == 0x01 &&
+                msg.data[6] == 0x04 && msg.data[7] == 0x00 && msg.data[8] == index &&
+                msg.data[12] == 0xF7) {
+                replyR = msg.data[9];
+                replyG = msg.data[10];
+                replyB = msg.data[11];
+                replyW = msg.data[12 - 1]; // msg.data[11] is b, msg.data[12] is w
+                gotReply = true;
+            }
+        };
+
+        sendSysEx(sysex);
+
+        // Wait for reply (timeout after 100ms)
+        for (int i = 0; i < 100; ++i) {
+            if (gotReply) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+
+        midiCallback = oldCallback;
+
+        if (gotReply) {
+            r = replyR;
+            g = replyG;
+            b = replyB;
+            w = replyW;
+            return true;
+        }
+        return false;
+    }
+
+    // Set just the RGB part of a palette entry (preserve W)
+    void setPaletteEntryRGB(uint8_t index, uint8_t r, uint8_t g, uint8_t b) {
+        uint8_t oldR = 0, oldG = 0, oldB = 0, oldW = 0;
+        if (getPaletteEntry(index, oldR, oldG, oldB, oldW)) {
+            setPaletteEntry(index, r, g, b, oldW);
+        } else {
+            setPaletteEntry(index, r, g, b, 0);
+        }
+    }
+
+    // Set just the BW part of a palette entry (preserve RGB)
+    void setPaletteEntryBW(uint8_t index, uint8_t w) {
+        uint8_t oldR = 0, oldG = 0, oldB = 0, oldW = 0;
+        if (getPaletteEntry(index, oldR, oldG, oldB, oldW)) {
+            setPaletteEntry(index, oldR, oldG, oldB, w);
+        } else {
+            setPaletteEntry(index, 0, 0, 0, w);
+        }
     }
 };
