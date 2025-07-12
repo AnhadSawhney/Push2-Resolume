@@ -17,13 +17,13 @@ public:
     
     // Print method for trickle-down printing
     void print(const std::string& indent) const {
-        /*if (properties.empty()) return;
+        if (properties.empty()) return;
         
         for (const auto& pair : properties) {
             std::cout << indent << pair.first << " = "
                       << getPropertyAsString(pair.first)
                       << " (" << getPropertyType(pair.first) << ")" << std::endl;
-        }*/
+        }
        return;
     }
     
@@ -216,8 +216,9 @@ public:
             }
             
             // Handle connected status specially
-            if (endpoint == "connected" && !integers.empty()) {
+            if (endpoint == "connect" && !integers.empty()) {
                 connected = (integers[0] == 1);
+                //std::cout << "Clip " << id << " endpoint:" << endpoint << " value: " << integers[0] << std::endl;
                 return;
             }
             
@@ -266,7 +267,7 @@ public:
     
     // Print method for trickle-down printing
     void print(const std::string& indent) const {
-        std::cout << indent << "Clip: " << name << " (ID: " << id << ", Connected: " << (connected ? "Yes" : "No") << ")" << std::endl;
+        std::cout << indent << "Clip " << id << ": " << name << (connected ? " [Connected]" : "") << std::endl;
         
         if (!properties.properties.empty()) {
             std::cout << indent << "  Properties:" << std::endl;
@@ -274,9 +275,8 @@ public:
         }
         
         if (!effects.empty()) {
-            std::cout << indent << "  Effects:" << std::endl;
             for (const auto& effect : effects) {
-                effect->print(indent + "    ");
+                effect->print(indent + "  ");
             }
         }
     }
@@ -411,17 +411,16 @@ public:
     
     // Print method for trickle-down printing
     void print(const std::string& indent) const {
-        std::cout << indent << "Layer: ID " << id << std::endl;
-        
+        std::cout << indent << "Layer " << id << ":" << std::endl;
+
         if (!properties.properties.empty()) {
             std::cout << indent << "  Properties:" << std::endl;
             properties.print(indent + "    ");
         }
         
         if (!effects.empty()) {
-            std::cout << indent << "  Effects:" << std::endl;
             for (const auto& effect : effects) {
-                effect->print(indent + "    ");
+                effect->print(indent + "  ");
             }
         }
         
@@ -685,13 +684,13 @@ public:
                 int columnId = extractNumber(columnPart);
                 std::string property = nextRemainder.substr(secondSlash + 1);
                 
-                if (property == "selected" && !integers.empty()) {
+                if (property == "select" && !integers.empty()) {
                     if (integers[0] == 1) {
                         selectedColumnId = columnId;
                     } else if (selectedColumnId == columnId) {
                         selectedColumnId = 0;
                     }
-                } else if (property == "connected" && !integers.empty()) {
+                } else if (property == "connect" && !integers.empty()) {
                     if (integers[0] == 1) {
                         connectedColumnId = columnId;
                     } else if (connectedColumnId == columnId) {
@@ -807,154 +806,6 @@ public:
         for (auto& layer : layers) {
             layer->clear();
         }
-    }
-    
-    void printStateTree() const {
-        std::cout << "\n========== RESOLUME STATE TREE ==========\n" << std::endl;
-        
-        // Print composition/deck properties
-        std::cout << "COMPOSITION/DECK PROPERTIES:" << std::endl;
-        if (deckProperties.empty()) {
-            std::cout << "  `-- (no properties)" << std::endl;
-        } else {
-            printProperties(deckProperties, "  ");
-        }
-        
-        // Print selection state
-        std::cout << "\nSELECTION STATE:" << std::endl;
-        std::cout << "  |-- Current Deck: " << (deckInitialized ? std::to_string(currentDeckId) : "none") << std::endl;
-        std::cout << "  |-- Selected Column: " << (selectedColumnId ? std::to_string(selectedColumnId) : "none") << std::endl;
-        std::cout << "  |-- Connected Column: " << (connectedColumnId ? std::to_string(connectedColumnId) : "none") << std::endl;
-        std::cout << "  |-- Selected Layer: " << (selectedLayerId ? std::to_string(selectedLayerId) : "none") << std::endl;
-        std::cout << "  |-- Selected Clip: " << (selectedClipLayerId && selectedClipId ? 
-                     "Layer " + std::to_string(selectedClipLayerId) + ", Clip " + std::to_string(selectedClipId) : "none") << std::endl;
-        std::cout << "  `-- Last Selection Type: ";
-        switch (lastSelectionType) {
-            case LastSelectionType::NONE: std::cout << "none"; break;
-            case LastSelectionType::LAYER: std::cout << "layer"; break;
-            case LastSelectionType::CLIP: std::cout << "clip"; break;
-        }
-        std::cout << std::endl;
-        
-        // Print layers
-        std::cout << "\n LAYERS:" << std::endl;
-        bool hasAnyLayerData = false;
-        
-        for (const auto& layer : layers) {
-            bool hasLayerData = !layer->properties.empty() || !layer->effects.empty();
-            
-            // Check if any clips have data
-            bool hasClipData = false;
-            for (const auto& clip : layer->clips) {
-                if (!clip->name.empty() || !clip->properties.empty() || !clip->effects.empty()) {
-                    hasClipData = true;
-                    break;
-                }
-            }
-            
-            if (hasLayerData || hasClipData) {
-                hasAnyLayerData = true;
-                std::string layerPrefix = (layer->id == selectedLayerId) ? "X " : "   ";
-                std::cout << layerPrefix << "Layer " << layer->id << ":" << std::endl;
-                
-                // Print layer properties
-                if (!layer->properties.empty()) {
-                    std::cout << "     |-- Properties:" << std::endl;
-                    printProperties(layer->properties, "     |   ");
-                }
-                
-                // Print layer effects
-                if (!layer->effects.empty()) {
-                    bool isLast = !hasClipData;
-                    std::cout << "     " << (isLast ? "`-- " : "|-- ") << "Video Effects:" << std::endl;
-                    for (size_t i = 0; i < layer->effects.size(); i++) {
-                        const auto& effect = layer->effects[i];
-                        bool isLastEffect = (i == layer->effects.size() - 1);
-                        std::string effectPrefix = isLastEffect ? "`-- " : "|-- ";
-                        std::cout << "     " << (isLast ? "    " : "|   ") << effectPrefix << effect->name << ":" << std::endl;
-                        
-                        // Print effect properties
-                        printProperties(effect->properties, std::string("     ") + (isLast ? "    " : "|   ") + (isLastEffect ? "    " : "|   "));
-                    }
-                }
-                
-                // Print clips
-                if (hasClipData) {
-                    std::cout << "     `-- Clips:" << std::endl;
-                    for (const auto& clip : layer->clips) {
-                        bool hasThisClipData = !clip->name.empty() || !clip->properties.empty() || !clip->effects.empty();
-                        
-                        if (hasThisClipData) {
-                            bool isSelected = (layer->id == selectedClipLayerId && clip->id == selectedClipId);
-                            std::string clipPrefix = isSelected ? "X " : "   ";
-                            std::cout << "         " << clipPrefix << "Clip " << clip->id;
-                            if (!clip->name.empty()) {
-                                std::cout << " (\"" << clip->name << "\")";
-                            }
-                            std::cout << ":" << std::endl;
-                            
-                            // Print clip properties
-                            if (!clip->properties.empty()) {
-                                std::cout << "             |-- Properties:" << std::endl;
-                                printProperties(clip->properties, "             |   ");
-                            }
-                            
-                            // Print clip effects
-                            if (!clip->effects.empty()) {
-                                bool hasProps = !clip->properties.empty();
-                                std::cout << "             " << (hasProps ? "`-- " : "`-- ") << "Video Effects:" << std::endl;
-                                for (size_t i = 0; i < clip->effects.size(); i++) {
-                                    const auto& effect = clip->effects[i];
-                                    bool isLastEffect = (i == clip->effects.size() - 1);
-                                    std::string effectPrefix = isLastEffect ? "`-- " : "|-- ";
-                                    std::cout << "                 " << effectPrefix << effect->name << ":" << std::endl;
-                                    
-                                    // Print effect properties
-                                    printProperties(effect->properties, std::string("                 ") + (isLastEffect ? "    " : "|   "));
-                                }
-                            }
-                        }
-                    }
-                }
-                std::cout << std::endl;
-            }
-        }
-        
-        if (!hasAnyLayerData) {
-            std::cout << "  `-- (no layer data)" << std::endl;
-        }
-        
-        // Print summary statistics
-        int totalLayers = 0, totalClips = 0, totalEffects = 0, totalProperties = 0;
-        
-        for (const auto& layer : layers) {
-            bool hasData = !layer->properties.empty() || !layer->effects.empty();
-            
-            for (const auto& clip : layer->clips) {
-                if (!clip->name.empty() || !clip->properties.empty() || !clip->effects.empty()) {
-                    hasData = true;
-                    totalClips++;
-                    totalEffects += clip->effects.size();
-                    totalProperties += clip->properties.size();
-                }
-            }
-            
-            if (hasData) {
-                totalLayers++;
-                totalEffects += layer->effects.size();
-                totalProperties += layer->properties.size();
-            }
-        }
-        
-        totalProperties += deckProperties.size();
-        
-        std::cout << "\nSUMMARY STATISTICS:" << std::endl;
-        std::cout << "  |-- Active Layers: " << totalLayers << std::endl;
-        std::cout << "  |-- Active Clips: " << totalClips << std::endl;
-        std::cout << "  |-- Total Effects: " << totalEffects << std::endl;
-        std::cout << "  `-- Total Properties: " << totalProperties << std::endl;
-        
-        std::cout << "\n==========================================\n" << std::endl;
     }
     
     // Additional convenience methods for PushUI integration
