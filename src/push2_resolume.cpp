@@ -1,5 +1,7 @@
 ﻿// main.cpp
 
+//#define DEBUG_OSC 1
+
 // OSC pack (adjust include paths to your install)
 #include "osc/OscOutboundPacketStream.h"
 #include "osc/OscReceivedElements.h"

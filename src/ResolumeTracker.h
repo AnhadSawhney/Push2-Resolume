@@ -1,5 +1,4 @@
-#ifndef RESOLUME_TRACKER_H
-#define RESOLUME_TRACKER_H
+#pragma once
 
 #include <vector>
 #include <string>
@@ -289,26 +288,27 @@ public:
     PropertyDictionary properties;
     std::vector<std::shared_ptr<Effect>> effects;
     std::vector<std::shared_ptr<Clip>> clips;
-    
+
     Layer(int layerId) : id(layerId) {
-        // Initialize clips (Resolume typically has 5 clips per layer)
-        for (int i = 1; i <= 5; i++) {
-            clips.push_back(std::make_shared<Clip>(i));
-        }
+        // Do not pre-initialize clips to a fixed size.
     }
-    
+
     std::shared_ptr<Clip> getClip(int clipId) {
-        if (clipId >= 1 && clipId <= clips.size()) {
-            return clips[clipId - 1];
+        if (clipId < 1) return nullptr;
+        // Dynamically grow the clips vector as needed
+        if (clipId > static_cast<int>(clips.size())) {
+            clips.resize(clipId);
+            for (int i = 0; i < clipId; ++i) {
+                if (!clips[i]) clips[i] = std::make_shared<Clip>(i + 1);
+            }
         }
-        return nullptr;
+        return clips[clipId - 1];
     }
-    
+
     std::shared_ptr<const Clip> getClip(int clipId) const {
-        if (clipId >= 1 && clipId <= clips.size()) {
-            return clips[clipId - 1];
-        }
-        return nullptr;
+        if (clipId < 1) return nullptr;
+        if (clipId > static_cast<int>(clips.size())) return nullptr;
+        return clips[clipId - 1];
     }
     
     std::shared_ptr<Effect> getOrCreateEffect(const std::string& effectName) {
@@ -1021,4 +1021,3 @@ public:
     }
 };
 
-#endif // RESOLUME_TRACKER_H

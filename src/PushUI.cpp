@@ -120,29 +120,29 @@ void PushUI::handleNavigationButtons(int controller, int value) {
         case BTN_OCTAVE_UP:
             if (canMoveLayerUp()) {
                 layerOffset++;
-                std::cout << "Layer offset increased to " << layerOffset << " (showing layers "
-                          << (layerOffset + 1) << "-" << (layerOffset + 8) << ")" << std::endl;
+                //std::cout << "Layer offset increased to " << layerOffset << " (showing layers "
+                //          << (layerOffset + 1) << "-" << (layerOffset + 8) << ")" << std::endl;
             }
             break;
         case BTN_OCTAVE_DOWN:
             if (canMoveLayerDown()) {
                 layerOffset--;
-                std::cout << "Layer offset decreased to " << layerOffset << " (showing layers "
-                          << (layerOffset + 1) << "-" << (layerOffset + 8) << ")" << std::endl;
+                //std::cout << "Layer offset decreased to " << layerOffset << " (showing layers "
+                //          << (layerOffset + 1) << "-" << (layerOffset + 8) << ")" << std::endl;
             }
             break;
         case BTN_PAGE_RIGHT:
             if (canMoveColumnRight()) {
                 columnOffset++;
-                std::cout << "Column offset increased to " << columnOffset << " (showing columns "
-                          << (columnOffset + 1) << "-" << (columnOffset + 8) << ")" << std::endl;
+                //std::cout << "Column offset increased to " << columnOffset << " (showing columns "
+                //          << (columnOffset + 1) << "-" << (columnOffset + 8) << ")" << std::endl;
             }
             break;
         case BTN_PAGE_LEFT:
             if (canMoveColumnLeft()) {
                 columnOffset--;
-                std::cout << "Column offset decreased to " << columnOffset << " (showing columns "
-                          << (columnOffset + 1) << "-" << (columnOffset + 8) << ")" << std::endl;
+                //std::cout << "Column offset decreased to " << columnOffset << " (showing columns "
+                //          << (columnOffset + 1) << "-" << (columnOffset + 8) << ")" << std::endl;
             }
             break;
     }

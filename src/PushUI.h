@@ -44,8 +44,8 @@ private:
     enum PushControls {
         BTN_OCTAVE_UP = 55,
         BTN_OCTAVE_DOWN = 54,
-        BTN_PAGE_LEFT = 63,
-        BTN_PAGE_RIGHT = 62,
+        BTN_PAGE_LEFT = 62,
+        BTN_PAGE_RIGHT = 63,
         BTN_PLAY = 85,
         BTN_RECORD = 86,
         BTN_STOP = 87
