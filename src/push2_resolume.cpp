@@ -72,20 +72,22 @@ int main(int argc, char* argv[]) {
         }
 
         // Create OSC sender for sending commands to Resolume
-        auto oscSender = std::make_unique<OSCSenderImpl>(resolumeIp, resolumeOscPort);
+        std::unique_ptr<OSCSender> oscSender = std::make_unique<OSCSender>(resolumeIp, resolumeOscPort);
 
         // Create PushUI (only if Push is connected)
         std::unique_ptr<PushUI> pushUI;
+        OSCSender* oscSenderForListener = oscSender.get();
         if (pushConnected) {
             pushUI = std::make_unique<PushUI>(push, resolumeTracker, std::move(oscSender));
-            
+            oscSenderForListener = pushUI->getOSCSender(); // You must implement getOSCSender() in PushUI to return the OSCSender pointer
+
             // Set up MIDI callback to handle Push 2 input
             push.setMidiCallback([&pushUI](const PushMidiMessage& msg) {
                 if (pushUI) {
                     pushUI->onMidiMessage(msg);
                 }
             });
-            
+
             if (!pushUI->initialize()) {
                 std::cerr << "Failed to initialize Push UI" << std::endl;
                 pushUI.reset();
@@ -94,11 +96,8 @@ int main(int argc, char* argv[]) {
         }
 
         // Create OSC listener
-        ResolumeOSCListener listener(oscSender.get());
-        listener.setMessageCallback([&resolumeTracker](const std::string& address, const std::vector<float>& floats,
-                           const std::vector<int>& integers, const std::vector<std::string>& strings) {
-            resolumeTracker.processOSCMessage(address, floats, integers, strings);
-        });
+        ResolumeOSCListener listener(oscSenderForListener);
+        resolumeTracker.setOSCListener(&listener);
         
         // Create UDP socket for receiving OSC messages
         UdpListeningReceiveSocket socket(IpEndpointName(IpEndpointName::ANY_ADDRESS, incomingOscPort), &listener);
@@ -206,9 +205,9 @@ int main(int argc, char* argv[]) {
         }
         
         shouldStop.store(true);
-        //if (oscThread.joinable()) {
-        //    oscThread.join();
-        //}
+        if (oscThread.joinable()) {
+            oscThread.join();
+        }
         if (updateThread.joinable()) {
             updateThread.join();
         }

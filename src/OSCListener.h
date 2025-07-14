@@ -9,8 +9,12 @@
 #include <condition_variable>
 #include <map>
 #include <functional>
+#include <chrono>
+
+#include "OSCSender.h"
 
 // Forward declaration
+//class ResolumeTracker;
 class OSCSender;
 
 using namespace osc;
@@ -43,10 +47,12 @@ public:
     }
     
     // Blocking query function
-    QueryResult query(const std::string& address, int timeoutMs = 5000) {
+    QueryResult query(const std::string& address, int timeoutMs = 50) {
         if (!oscSender) {
             throw std::runtime_error("OSCSender not set");
         }
+
+        //std::cout << "Querying: " << address << std::endl;
         
         std::unique_lock<std::mutex> lock(queryMutex);
         
@@ -73,27 +79,30 @@ public:
     }
     
     // Convenience wrappers for specific types
-    int QueryInt(const std::string& address, int timeoutMs = 5000) {
+    int QueryInt(const std::string& address, int timeoutMs = 50) {
         QueryResult result = query(address, timeoutMs);
-        if (result.integers.empty()) {
-            throw std::runtime_error("No integer value received for address: " + address);
-        }
+        //if (result.integers.empty()) {
+        //    throw std::runtime_error("No integer value received for address: " + address);
+        //}
         return result.integers[0];
     }
     
-    float QueryFloat(const std::string& address, int timeoutMs = 5000) {
+    float QueryFloat(const std::string& address, int timeoutMs = 50) {
         QueryResult result = query(address, timeoutMs);
-        if (result.floats.empty()) {
-            throw std::runtime_error("No float value received for address: " + address);
-        }
+        //if (result.floats.empty()) {
+        //    throw std::runtime_error("No float value received for address: " + address);
+        //}
         return result.floats[0];
     }
     
-    std::string QueryString(const std::string& address, int timeoutMs = 5000) {
+    std::string QueryString(const std::string& address, int timeoutMs = 50) {
         QueryResult result = query(address, timeoutMs);
-        if (result.strings.empty()) {
-            throw std::runtime_error("No string value received for address: " + address);
-        }
+        //if (result.strings.empty()) {
+        //    throw std::runtime_error("No string value received for address: " + address);
+        //}
+
+        //std::cout << "Received string: " << result.strings[0] << std::endl;
+
         return result.strings[0];
     }
     

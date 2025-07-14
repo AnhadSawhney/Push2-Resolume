@@ -13,21 +13,16 @@
 #include <thread>
 #include <iostream>
 
+#include "OSCSender.h"
+
 #include "PushUSB.h"
 //#include "ResolumeTrackerREST.h"
 #include "ResolumeTrackerOSC.h"
 
 // Forward declarations for OSC functionality
-class OSCSender {
-public:
-    virtual void sendMessage(const std::string& address, float value) = 0;
-    virtual void sendMessage(const std::string& address, int value) = 0;
-    virtual void sendMessage(const std::string& address, const std::string& value) = 0;
-};
 
 class PushLights;
 class PushDisplay;
-
 
 // Main PushUI class
 class PushUI {
@@ -74,6 +69,7 @@ public:
     void update();
     void onMidiMessage(const PushMidiMessage& msg);
     void forceRefresh();
+    OSCSender* getOSCSender() { return oscSender.get(); }
 
     // Mode accessors
     Mode getMode() const { return mode; }

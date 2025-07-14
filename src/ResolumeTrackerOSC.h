@@ -13,6 +13,9 @@
 #include <functional>
 #include "PropertyDictionary.h"
 
+// Include the ResolumeOSCListener header to provide the full type definition
+#include "OSCListener.h"
+
 // Helper function to split OSC address into path components
 inline std::vector<std::string> splitOSCPath(const std::string& address) {
     std::vector<std::string> parts;
@@ -321,19 +324,36 @@ private:
             connectedClipIndices.resize(layers.size(), 0);
     }
 
+    // Add reference to OSC listener for queries
+    ResolumeOSCListener* oscListener = nullptr;
+
 public:
-    ResolumeTracker() : currentDeckId(0), deckInitialized(false),
+    ResolumeTracker(ResolumeOSCListener* listener = nullptr) : currentDeckId(0), deckInitialized(false),
                        lastSelectedLayerId(0), lastSelectedClipLayerId(0), lastSelectedClipId(0),
-                       lastSelectionType(LastSelectionType::NONE)
+                       lastSelectionType(LastSelectionType::NONE), oscListener(listener)
     {
-        for (int i = 1; i <= 10; i++) {
-            layers.push_back(std::make_shared<Layer>(i));
-        }
+        // Start with no layers - they will be created as needed
         ensureConnectedClipIndices();
+        
+        // Set up the callback if OSCListener is provided
+        if (oscListener) {
+            oscListener->setMessageCallback([this](const std::string& address, const std::vector<float>& floats, 
+                                                   const std::vector<int>& integers, const std::vector<std::string>& strings) {
+                this->processOSCMessage(address, floats, integers, strings);
+            });
+        }
     }
     
-    // Removed: setDeckChangedCallback
-
+    void setOSCListener(ResolumeOSCListener* listener) {
+        oscListener = listener;
+        if (oscListener) {
+            oscListener->setMessageCallback([this](const std::string& address, const std::vector<float>& floats, 
+                                                   const std::vector<int>& integers, const std::vector<std::string>& strings) {
+                this->processOSCMessage(address, floats, integers, strings);
+            });
+        }
+    }
+    
     // Returns the number of layers
     int getLayerCount() const {
         return static_cast<int>(layers.size());
@@ -433,7 +453,7 @@ public:
         // --- 3. Trickledown: pass to appropriate layer/clip/effect ---
         if (pathParts[0] == "layers" && pathParts.size() >= 2) {
             int layerId = std::stoi(pathParts[1]);
-            auto layer = getLayer(layerId);
+            auto layer = getOrCreateLayer(layerId); // Use getOrCreateLayer instead of getLayer
             if (layer) {
                 // Remove "layers" and layer number from path
                 std::vector<std::string> remainingPath(pathParts.begin() + 2, pathParts.end());
@@ -450,15 +470,29 @@ public:
         }
     }
     
+    std::shared_ptr<Layer> getOrCreateLayer(int layerId) {
+        if (layerId < 1) return nullptr;
+        
+        // Dynamically grow the layers vector as needed
+        if (layerId > static_cast<int>(layers.size())) {
+            layers.resize(layerId);
+            for (int i = 0; i < layerId; ++i) {
+                if (!layers[i]) layers[i] = std::make_shared<Layer>(i + 1);
+            }
+            ensureConnectedClipIndices(); // Update connected clip indices when layers change
+        }
+        return layers[layerId - 1];
+    }
+    
     std::shared_ptr<Layer> getLayer(int layerId) {
-        if (layerId >= 1 && layerId <= layers.size()) {
+        if (layerId >= 1 && layerId <= static_cast<int>(layers.size())) {
             return layers[layerId - 1];
         }
         return nullptr;
     }
     
     std::shared_ptr<const Layer> getLayer(int layerId) const {
-        if (layerId >= 1 && layerId <= layers.size()) {
+        if (layerId >= 1 && layerId <= static_cast<int>(layers.size())) {
             return layers[layerId - 1];
         }
         return nullptr;
@@ -548,10 +582,25 @@ public:
     
     // Additional convenience methods for PushUI integration
     bool doesClipExist(int column, int layer) {
-        auto layerObj = getLayer(layer);
-        if (!layerObj) return false;
-        auto clipObj = layerObj->getClip(column);
-        return clipObj && !clipObj->name.empty();
+        if (!oscListener) {
+            // Fallback to old method if no OSC listener available
+            auto layerObj = getLayer(layer);
+            if (!layerObj) return false;
+            auto clipObj = layerObj->getClip(column);
+            return clipObj && !clipObj->name.empty();
+        }
+
+        //std::cout << "Querying clip existence: Layer " << layer << ", Column " << column << std::endl;
+        
+        try {
+            std::string address = "/composition/layers/" + std::to_string(layer) + "/clips/" + std::to_string(column) + "/name";
+            std::string clipName = oscListener->QueryString(address, 15); // 15 ms timeout
+            return !clipName.empty();
+        } catch (const std::exception& ex) {
+            // Query failed or timed out, assume clip doesn't exist
+            //std::cout << "Error querying: " << ex.what() << std::endl;
+            return false;
+        }
     }
     
     bool isColumnConnected(int column) {
