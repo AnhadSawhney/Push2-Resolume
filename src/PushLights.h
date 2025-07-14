@@ -221,10 +221,10 @@ public:
     // New: update column (cc20-27) and layer (cc36-43) button lights
     void updateColumnAndLayerButtons() {
         if (!parentUI) return;
-        int connectedColumn = parentUI->getResolumeTracker().getConnectedColumnId();
-        int selectedLayer = parentUI->getResolumeTracker().getSelectedLayerId();
-        int numColumns = parentUI->numColumns;
-        int numLayers = parentUI->numLayers;
+        int connectedColumn = parentUI->getResolumeTracker().getConnectedColumn();
+        int selectedLayer = parentUI->getResolumeTracker().getSelectedLayer();
+        int numColumns = parentUI->getNumColumns();
+        int numLayers = parentUI->getNumLayers();
 
         // Column buttons: cc20-cc27
         for (int i = 0; i < 8; ++i) {
@@ -248,7 +248,7 @@ public:
             int cc = 36 + i;
             int layer = parentUI->getLayerOffset() + i + 1; // 1-based layer
             Color color = Color::BLACK;
-            if (layer <= numLayers && numLayers > 0 && parentUI->resolumeTracker.hasLayerContent(layer)) {
+            if (layer <= numLayers && numLayers > 0 && parentUI->resolumeTracker.doesLayerExist(layer)) {
                 if (layer == selectedLayer) {
                     color = Color::GREEN;
                 } else {
@@ -262,15 +262,18 @@ public:
     // Update grid lighting based on clips
     void updateGridLights() {
         if (!parentUI) return;
+
+        int numColumns = parentUI->getNumColumns();
+
         for (int gridRow = 0; gridRow < 8; gridRow++) {
             for (int gridCol = 0; gridCol < 8; gridCol++) {
                 int resolumeLayer = gridRow + 1 + parentUI->layerOffset;
                 int resolumeColumn = gridCol + 1 + parentUI->columnOffset;
                 Color padColor = Color::BLACK;
-                if (parentUI->resolumeTracker.hasClip(resolumeColumn, resolumeLayer)) {
-                    if (parentUI->resolumeTracker.isClipPlaying(resolumeColumn, resolumeLayer)) {
+                if (parentUI->resolumeTracker.doesClipExist(resolumeColumn, resolumeLayer)) {
+                    if (parentUI->resolumeTracker.isClipConnected(resolumeColumn, resolumeLayer)) {
                         // Lit up according to column number (rainbow)
-                        float hue = (float)(resolumeColumn - 1) * 360.0f / 8.0f;
+                        float hue = (float)(resolumeColumn - 1) * 360.0f / ((float)numColumns);
                         padColor = Color::fromHSV(hue, 1.0f, 1.0f);
                     } else {
                         padColor = Color::WHITE;
@@ -284,12 +287,17 @@ public:
     // Update navigation button lighting
     void updateNavigationLights() {
         if (!parentUI) return;
-        
+
+        int layers = parentUI->getNumLayers();
+        int columns = parentUI->getNumColumns();
+        int layerOffset = parentUI->getLayerOffset();
+        int columnOffset = parentUI->getColumnOffset();
+
         // Only send MIDI if the button state has actually changed
-        setButtonColorBW(55, parentUI->canMoveLayerUp() ? 255 : 0);     // BTN_OCTAVE_UP
-        setButtonColorBW(54, parentUI->canMoveLayerDown() ? 255 : 0);   // BTN_OCTAVE_DOWN
-        setButtonColorBW(63, parentUI->canMoveColumnRight() ? 255 : 0); // BTN_PAGE_RIGHT
-        setButtonColorBW(62, parentUI->canMoveColumnLeft() ? 255 : 0);  // BTN_PAGE_LEFT
+        setButtonColorBW(55, layerOffset + 8 < layers ? 255 : 0);     // BTN_OCTAVE_UP
+        setButtonColorBW(54, layerOffset > 0 ? 255 : 0);   // BTN_OCTAVE_DOWN
+        setButtonColorBW(63, columnOffset + 8 < columns ? 255 : 0); // BTN_PAGE_RIGHT
+        setButtonColorBW(62, columnOffset > 0 ? 255 : 0);  // BTN_PAGE_LEFT
 
         // Master button (cc28) always white
         setButtonColorBW(28, 128);

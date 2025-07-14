@@ -15,6 +15,8 @@ public:
     
     // Print method for trickle-down printing
     void print(const std::string& indent) const {
+        return;
+        
         if (properties.empty()) return;
         
         for (const auto& pair : properties) {

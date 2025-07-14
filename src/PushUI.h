@@ -1,9 +1,5 @@
 #pragma once
 
-#include "PushUSB.h"
-#include "ResolumeTracker.h"
-
-
 #include <vector>
 #include <map>
 #include <chrono>
@@ -16,6 +12,9 @@
 #include <cstdlib>
 #include <thread>
 #include <iostream>
+
+#include "PushUSB.h"
+#include "ResolumeTrackerREST.h"
 
 // Forward declarations for OSC functionality
 class OSCSender {
@@ -68,6 +67,8 @@ public:
     bool initialize();
     int getColumnOffset() const;
     int getLayerOffset() const;
+    int getNumLayers() const;
+    int getNumColumns() const;
     ResolumeTracker& getResolumeTracker();
     void update();
     void onMidiMessage(const PushMidiMessage& msg);
@@ -81,9 +82,5 @@ public:
 private:
     void handlePadPress(int note, int velocity);
     void handleNavigationButtons(int controller, int value);
-    inline bool canMoveLayerUp() { return layerOffset + 8 < numLayers; };
-    inline bool canMoveLayerDown() { return layerOffset > 0; };
-    inline bool canMoveColumnRight() { return columnOffset + 8 < numColumns; };
-    inline bool canMoveColumnLeft() { return columnOffset > 0; };
 };
 

@@ -1,149 +1,17 @@
 ﻿// main.cpp
 
-//#define DEBUG_OSC 1
-
 // OSC pack (adjust include paths to your install)
-#include "osc/OscOutboundPacketStream.h"
-#include "osc/OscReceivedElements.h"
-#include "osc/OscPacketListener.h"
-#include "ip/UdpSocket.h"
-#include "ip/IpEndpointName.h"
-#include "ResolumeTracker.h"
-#include "PushUI.h"
 #include <iostream>
 #include <thread>
 #include <atomic>
 #include <memory>
+#include <string>
 
 // Push 2 USB (adjust include paths to your install)
+#include "OSCSender.h"
+#include "PushUI.h"
 #include "PushUSB.h"
-
-using namespace osc;
-
-// OSC Sender implementation
-class OSCSenderImpl : public OSCSender {
-private:
-    UdpTransmitSocket socket;
-    IpEndpointName remoteEndpoint;
-    
-public:
-    OSCSenderImpl(const std::string& address, int port) 
-        : socket(IpEndpointName(address.c_str(), port)), 
-          remoteEndpoint(address.c_str(), port) {}
-    
-    void sendMessage(const std::string& address, float value) override {
-        char buffer[1024];
-        osc::OutboundPacketStream p(buffer, 1024);
-        p << osc::BeginMessage(address.c_str()) << value << osc::EndMessage;
-        socket.Send(p.Data(), p.Size());
-        #ifdef DEBUG_OSC
-        std::cout << "OSC: " << address << " " << value << std::endl;
-        #endif
-    }
-    
-    void sendMessage(const std::string& address, int value) override {
-        char buffer[1024];
-        osc::OutboundPacketStream p(buffer, 1024);
-        p << osc::BeginMessage(address.c_str()) << value << osc::EndMessage;
-        socket.Send(p.Data(), p.Size());
-        #ifdef DEBUG_OSC
-        std::cout << "OSC: " << address << " " << value << std::endl;
-        #endif
-    }
-    
-    void sendMessage(const std::string& address, const std::string& value) override {
-        char buffer[1024];
-        osc::OutboundPacketStream p(buffer, 1024);
-        p << osc::BeginMessage(address.c_str()) << value.c_str() << osc::EndMessage;
-        socket.Send(p.Data(), p.Size());
-        #ifdef DEBUG_OSC
-        std::cout << "OSC: " << address << " " << value << std::endl;
-        #endif
-    }
-};
-
-class ResolumeOSCListener : public OscPacketListener {
-private:
-    ResolumeTracker& tracker;
-    PushUI* pushUI;  // Add reference to PushUI
-    
-public:
-    ResolumeOSCListener(ResolumeTracker& resolumeTracker) : tracker(resolumeTracker), pushUI(nullptr) {}
-    
-    void setPushUI(PushUI* ui) { pushUI = ui; }
-    
-protected:
-    virtual void ProcessMessage(const ReceivedMessage& m, const IpEndpointName& remoteEndpoint) override {
-        try {
-            std::string address(m.AddressPattern());
-            std::vector<float> floats;
-            std::vector<int> integers;
-            std::vector<std::string> strings;
-            
-            // Parse arguments
-            ReceivedMessage::const_iterator arg = m.ArgumentsBegin();
-            while (arg != m.ArgumentsEnd()) {
-                if (arg->IsFloat()) {
-                    floats.push_back(arg->AsFloat());
-                } else if (arg->IsInt32()) {
-                    integers.push_back(arg->AsInt32());
-                } else if (arg->IsString()) {
-                    strings.push_back(std::string(arg->AsString()));
-                }
-                ++arg;
-            }
-            
-            // Send to tracker
-            tracker.processOSCMessage(address, floats, integers, strings);
-            
-            // Debug output
-            #ifdef DEBUG_OSC
-                std::cout << "Received: " << address;
-                if (!floats.empty()) {
-                    std::cout << " floats=[";
-                    for (size_t i = 0; i < floats.size(); ++i) {
-                        if (i > 0) std::cout << ", ";
-                        std::cout << floats[i];
-                    }
-                    std::cout << "]";
-                }
-                if (!integers.empty()) {
-                    std::cout << " integers=[";
-                    for (size_t i = 0; i < integers.size(); ++i) {
-                        if (i > 0) std::cout << ", ";
-                        std::cout << integers[i];
-                    }
-                    std::cout << "]";
-                }
-                if (!strings.empty()) {
-                    std::cout << " strings=[";
-                    for (size_t i = 0; i < strings.size(); ++i) {
-                        if (i > 0) std::cout << ", ";
-                        std::cout << "\"" << strings[i] << "\"";
-                    }
-                    std::cout << "]";
-                }
-                std::cout << std::endl;
-            #endif
-            
-        } catch (Exception& e) {
-            std::cerr << "Error parsing OSC message: " << e.what() << std::endl;
-        }
-    }
-    
-    virtual void ProcessBundle(const ReceivedBundle& b, const IpEndpointName& remoteEndpoint) override {
-        // Process each element in the bundle
-        ReceivedBundle::const_iterator iter = b.ElementsBegin();
-        while (iter != b.ElementsEnd()) {
-            if (iter->IsMessage()) {
-                ProcessMessage(ReceivedMessage(*iter), remoteEndpoint);
-            } else if (iter->IsBundle()) {
-                ProcessBundle(ReceivedBundle(*iter), remoteEndpoint);
-            }
-            ++iter;
-        }
-    }
-};
+#include "ResolumeTrackerREST.h"
 
 // ------------------------
 // main()
@@ -172,6 +40,16 @@ int main(int argc, char* argv[]) {
             return 0;
         }
     }
+
+    // Check for livetree mode
+    bool liveTreeMode = false;
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--livetree") {
+            liveTreeMode = true;
+        }
+    }
+    liveTreeMode = false;
 
     try {
         // Create Resolume tracker
@@ -214,13 +92,13 @@ int main(int argc, char* argv[]) {
         }
 
         // Create OSC listener
-        ResolumeOSCListener listener(resolumeTracker);
-        if (pushUI) {
-            listener.setPushUI(pushUI.get());
-        }
+        //ResolumeOSCListener listener(resolumeTracker);
+        //if (pushUI) {
+        //    listener.setPushUI(pushUI.get());
+        //}
         
         // Create UDP socket for receiving OSC messages
-        UdpListeningReceiveSocket socket(IpEndpointName(IpEndpointName::ANY_ADDRESS, incomingOscPort), &listener);
+        //UdpListeningReceiveSocket socket(IpEndpointName(IpEndpointName::ANY_ADDRESS, incomingOscPort), &listener);
 
         std::cout << "Push2-Resolume Controller starting..." << std::endl;
         std::cout << "Listening for OSC messages on port " << incomingOscPort << std::endl;
@@ -229,40 +107,61 @@ int main(int argc, char* argv[]) {
         
         // Start listening in a separate thread
         std::atomic<bool> shouldStop(false);
-        std::thread oscThread([&socket, &shouldStop]() {
-            try {
-                socket.RunUntilSigInt();
-            } catch (...) {
-                shouldStop.store(true);
-            }
-        });
+        //std::thread oscThread([&socket, &shouldStop]() {
+        //    try {
+        //        socket.RunUntilSigInt();
+        //    } catch (...) {
+        //        shouldStop.store(true);
+        //    }
+        //});
         
         // Main update loop
         std::thread updateThread([&pushUI, &shouldStop]() {
+            constexpr int frameTimeMs = 1000 / 24; // ~41.67ms per frame for 24fps
             while (!shouldStop.load()) {
+                auto start = std::chrono::steady_clock::now();
                 if (pushUI) {
                     pushUI->update();
                 }
-                std::this_thread::sleep_for(std::chrono::milliseconds(50)); // 20 FPS
+                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - start
+                ).count();
+                int sleepMs = frameTimeMs - static_cast<int>(elapsed);
+                if (sleepMs > 0) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
+                } else {
+                    std::cout << "[Warning] Update loop is taking longer than frame time (" << elapsed << "ms)" << std::endl;
+                }
             }
         });
         
+        // If in livetree mode, run the live tree display loop and exit
+        if (liveTreeMode) {
+            while (true) {
+                // Clear screen (Windows)
+                std::system("cls");
+                resolumeTracker.print();
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            }
+            return 0;
+        }
+
         // Wait for user input to quit
         std::string input;
         while (std::getline(std::cin, input)) {
             if (input == "q" || input == "Q") {
                 break;
             } else if (input == "clear") {
-                resolumeTracker.clearAll();
+                resolumeTracker.clear();
                 std::cout << "Cleared all state" << std::endl;
-            } else if (input == "status") {
-                //std::cout << "Tempo controller playing: " << (resolumeTracker.isTempoControllerPlaying() ? "Yes" : "No") << std::endl;
+            } /* else if (input == "status") {
+                std::cout << "Tempo controller playing: " << (resolumeTracker.isTempoControllerPlaying() ? "Yes" : "No") << std::endl;
                 std::cout << "Selected layer: " << resolumeTracker.getSelectedLayerId() << std::endl;
                 auto selectedClip = resolumeTracker.getSelectedClip();
                 std::cout << "Selected clip: layer " << selectedClip.first << ", clip " << selectedClip.second << std::endl;
                 std::cout << "Selected column: " << resolumeTracker.getSelectedColumnId() << std::endl;
                 std::cout << "Push 2 connected: " << (pushConnected && push.isDeviceConnected() ? "Yes" : "No") << std::endl;
-            } else if (input == "tree" || input == "print") {
+            } */else if (input == "tree" || input == "print") {
                 resolumeTracker.print();
             } else if (input=="refresh") {
                 std::cout << "Forcing Push UI refresh" << std::endl;
@@ -284,8 +183,8 @@ int main(int argc, char* argv[]) {
                 // loop through the first 8 layers and 8 columns and print x if a clip exists else _
                 for (int layer = 1; layer <= 8; ++layer) {
                     for (int col = 1; col <= 8; ++col) {
-                        if (resolumeTracker.hasClip(col, layer)) {
-                            if (resolumeTracker.isClipPlaying(col, layer)) {
+                        if (resolumeTracker.doesClipExist(col, layer)) {
+                            if (resolumeTracker.isClipConnected(col, layer)) {
                                 std::cout << "O "; // O for playing clip
                             } else {
                                 std::cout << "X "; // X for existing clip
@@ -296,13 +195,17 @@ int main(int argc, char* argv[]) {
                     }
                     std::cout << "  (Layer " << layer << ")" << std::endl;
                 }
+            } else if (input == "livetree") {
+                // Launch a new window running this program in livetree mode
+                std::string cmd = "start \"LiveTree\" \"" + std::string(argv[0]) + "\" --livetree";
+                std::system(cmd.c_str());
             }
         }
         
         shouldStop.store(true);
-        if (oscThread.joinable()) {
-            oscThread.join();
-        }
+        //if (oscThread.joinable()) {
+        //    oscThread.join();
+        //}
         if (updateThread.joinable()) {
             updateThread.join();
         }

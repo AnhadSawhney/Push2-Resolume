@@ -2,7 +2,7 @@
 
 #include "PushUSB.h"
 #include "PushUI.h"
-#include "ResolumeTracker.h"
+#include "ResolumeTrackerREST.h"
 #include "Color.h"
 #include <cstdint>
 #include <memory>

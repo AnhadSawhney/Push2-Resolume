@@ -13,17 +13,6 @@ PushUI::PushUI(PushUSB& push, ResolumeTracker& tracker, std::unique_ptr<OSCSende
     display = new PushDisplay(pushDevice);
     lights->setParentUI(this);
     display->setParentUI(this);
-
-    // Register deckChangedCallback to update numLayers/numColumns
-    resolumeTracker.setDeckChangedCallback([this](int layers, int columns) {
-        this->numLayers = layers;
-        this->numColumns = columns;
-        // Optionally reset navigation if out of bounds
-        if (layerOffset > std::max(0, numLayers - 8)) layerOffset = std::max(0, numLayers - 8);
-        if (columnOffset > std::max(0, numColumns - 8)) columnOffset = std::max(0, numColumns - 8);
-
-        std::cout << "Deck changed. Layers: " << layers << ", Columns: " << columns << std::endl;
-    });
 }
 
 PushUI::~PushUI() {
@@ -49,9 +38,13 @@ bool PushUI::initialize() {
 
 int PushUI::getColumnOffset() const { return columnOffset; }
 int PushUI::getLayerOffset() const { return layerOffset; }
+int PushUI::getNumLayers() const { return resolumeTracker.getLayerCount(); }
+int PushUI::getNumColumns() const { return resolumeTracker.getColumnCount(); }
+
 ResolumeTracker& PushUI::getResolumeTracker() { return resolumeTracker; }
 
 void PushUI::update() {
+    //resolumeTracker.update();
     lights->updateLights();
     display->update();
     display->sendToDevice();
@@ -151,16 +144,24 @@ void PushUI::handlePadPress(int note, int velocity) {
 }
 
 void PushUI::handleNavigationButtons(int controller, int value) {
+    int columns = resolumeTracker.getColumnCount();
+    int layers = resolumeTracker.getLayerCount();
+    
     if (value == 0) return;
-    if (controller == BTN_OCTAVE_UP && canMoveLayerUp()) {
+    if (controller == BTN_OCTAVE_UP && layerOffset + 8 < layers) {
         layerOffset++;
-    } else if (controller == BTN_OCTAVE_DOWN && canMoveLayerDown()) {
+    } else if (controller == BTN_OCTAVE_DOWN && layerOffset > 0) {
         layerOffset--;
-    } else if (controller == BTN_PAGE_RIGHT && canMoveColumnRight()) {
+    } else if (controller == BTN_PAGE_RIGHT && columnOffset + 8 < columns) {
         columnOffset++;
-    } else if (controller == BTN_PAGE_LEFT && canMoveColumnLeft()) {
+    } else if (controller == BTN_PAGE_LEFT && columnOffset > 0) {
         columnOffset--;
     }
 }
 
-
+/*
+inline bool canMoveLayerUp() { return layerOffset + 8 < numLayers; };
+inline bool canMoveLayerDown() { return layerOffset > 0; };
+inline bool canMoveColumnRight() { return columnOffset + 8 < numColumns; };
+inline bool canMoveColumnLeft() { return columnOffset > 0; };
+*/
