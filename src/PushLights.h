@@ -222,23 +222,40 @@ public:
     void updateColumnAndLayerButtons() {
         if (!parentUI) return;
         int connectedColumn = parentUI->getResolumeTracker().getConnectedColumnId();
+        int selectedLayer = parentUI->getResolumeTracker().getSelectedLayerId();
+        int numColumns = parentUI->numColumns;
+        int numLayers = parentUI->numLayers;
 
         // Column buttons: cc20-cc27
         for (int i = 0; i < 8; ++i) {
             int cc = 20 + i;
             int column = parentUI->getColumnOffset() + i + 1; // 1-based column
+            if (column > numColumns || numColumns == 0) {
+                setButtonColorRGB(cc, Color::BLACK);
+                continue;
+            }
             if (column == connectedColumn) {
                 setButtonColorRGB(cc, Color::WHITE); // White (palette index)
             } else {
-                // Rainbow: evenly spaced hues, mapped to palette
-                float hue = (float)i * 360.0f / 8.0f;
+                // Rainbow: evenly spaced hues, mapped to palette, based on total columns
+                float hue = (float)(column - 1) * 360.0f / std::max(1, numColumns);
                 Color c = Color::fromHSV(hue, 1.0f, 1.0f);
                 setButtonColorRGB(cc, c);
             }
         }
-        // Layer buttons: cc36-cc43, always white
-        for (int cc = 36; cc < 44; ++cc) {
-            setButtonColorRGB(cc, Color::WHITE);
+        // Layer buttons: cc36-cc43
+        for (int i = 0; i < 8; ++i) {
+            int cc = 36 + i;
+            int layer = parentUI->getLayerOffset() + i + 1; // 1-based layer
+            Color color = Color::BLACK;
+            if (layer <= numLayers && numLayers > 0 && parentUI->resolumeTracker.hasLayerContent(layer)) {
+                if (layer == selectedLayer) {
+                    color = Color::GREEN;
+                } else {
+                    color = Color::WHITE;
+                }
+            }
+            setButtonColorRGB(cc, color);
         }
     }
 
@@ -273,5 +290,8 @@ public:
         setButtonColorBW(54, parentUI->canMoveLayerDown() ? 255 : 0);   // BTN_OCTAVE_DOWN
         setButtonColorBW(63, parentUI->canMoveColumnRight() ? 255 : 0); // BTN_PAGE_RIGHT
         setButtonColorBW(62, parentUI->canMoveColumnLeft() ? 255 : 0);  // BTN_PAGE_LEFT
+
+        // Master button (cc28) always white
+        setButtonColorBW(28, 128);
     }
 };

@@ -7,143 +7,18 @@
 #include <iostream>
 #include <variant>
 #include <sstream>
+#include <functional>
+#include "PropertyDictionary.h"
 
-// Unified property value type
-using PropertyValue = std::variant<float, int, std::string>;
-
-class PropertyDictionary {
-public:
-    std::map<std::string, PropertyValue> properties;
-    
-    // Print method for trickle-down printing
-    void print(const std::string& indent) const {
-        if (properties.empty()) return;
-        
-        for (const auto& pair : properties) {
-            std::cout << indent << pair.first << " = "
-                      << getPropertyAsString(pair.first)
-                      << " (" << getPropertyType(pair.first) << ")" << std::endl;
-        }
-       return;
-    }
-    
-    void setFloat(const std::string& key, float value) {
-        properties[key] = value;
-    }
-    
-    void setInt(const std::string& key, int value) {
-        properties[key] = value;
-    }
-    
-    void setString(const std::string& key, const std::string& value) {
-        properties[key] = value;
-    }
-    
-    // Generic setter
-    void setValue(const std::string& key, const PropertyValue& value) {
-        properties[key] = value;
-    }
-    
-    float getFloat(const std::string& key, float defaultValue = 0.0f) const {
-        auto it = properties.find(key);
-        if (it != properties.end()) {
-            if (std::holds_alternative<float>(it->second)) {
-                return std::get<float>(it->second);
-            } else if (std::holds_alternative<int>(it->second)) {
-                return static_cast<float>(std::get<int>(it->second));
-            }
-        }
-        return defaultValue;
-    }
-    
-    int getInt(const std::string& key, int defaultValue = 0) const {
-        auto it = properties.find(key);
-        if (it != properties.end()) {
-            if (std::holds_alternative<int>(it->second)) {
-                return std::get<int>(it->second);
-            } else if (std::holds_alternative<float>(it->second)) {
-                return static_cast<int>(std::get<float>(it->second));
-            }
-        }
-        return defaultValue;
-    }
-    
-    std::string getString(const std::string& key, const std::string& defaultValue = "") const {
-        auto it = properties.find(key);
-        if (it != properties.end()) {
-            if (std::holds_alternative<std::string>(it->second)) {
-                return std::get<std::string>(it->second);
-            }
-        }
-        return defaultValue;
-    }
-    
-    // Generic getter
-    PropertyValue getValue(const std::string& key, const PropertyValue& defaultValue = PropertyValue{}) const {
-        auto it = properties.find(key);
-        return (it != properties.end()) ? it->second : defaultValue;
-    }
-    
-    // Check if property exists
-    bool hasProperty(const std::string& key) const {
-        return properties.find(key) != properties.end();
-    }
-    
-    // Get property type as string
-    std::string getPropertyType(const std::string& key) const {
-        auto it = properties.find(key);
-        if (it != properties.end()) {
-            if (std::holds_alternative<float>(it->second)) return "float";
-            if (std::holds_alternative<int>(it->second)) return "int";
-            if (std::holds_alternative<std::string>(it->second)) return "string";
-        }
-        return "unknown";
-    }
-    
-    // Convert property to string for display
-    std::string getPropertyAsString(const std::string& key) const {
-        auto it = properties.find(key);
-        if (it != properties.end()) {
-            std::ostringstream oss;
-            std::visit([&oss](const auto& value) {
-                if constexpr (std::is_same_v<std::decay_t<decltype(value)>, std::string>) {
-                    oss << "\"" << value << "\"";
-                } else {
-                    oss << value;
-                }
-            }, it->second);
-            return oss.str();
-        }
-        return "";
-    }
-    
-    void clear() {
-        properties.clear();
-    }
-    
-    // Helper function to set property from OSC data
-    void setFromOSCData(const std::string& endpoint, 
-                       const std::vector<float>& floats, 
-                       const std::vector<int>& integers, 
-                       const std::vector<std::string>& strings) {
-        if (!floats.empty()) {
-            setFloat(endpoint, floats[0]);
-        } else if (!integers.empty()) {
-            setInt(endpoint, integers[0]);
-        } else if (!strings.empty()) {
-            setString(endpoint, strings[0]);
+inline int extractNumber(const std::string& str) {
+    std::string numStr = "";
+    for (char c : str) {
+        if (c >= '0' && c <= '9') {
+            numStr += c;
         }
     }
-    
-    // Iterator support for range-based loops
-    auto begin() const { return properties.begin(); }
-    auto end() const { return properties.end(); }
-    auto begin() { return properties.begin(); }
-    auto end() { return properties.end(); }
-    
-    size_t size() const { return properties.size(); }
-    bool empty() const { return properties.empty(); }
-};
+    return numStr.empty() ? 0 : std::stoi(numStr);
+}
 
 class Effect {
 public:
@@ -177,15 +52,14 @@ public:
 class Clip {
 public:
     int id;
-    std::string name; // Hardcoded as critically important
-    bool connected = false; // Connection status moved from PropertyDictionary
+    std::string name;
     PropertyDictionary properties;
     std::vector<std::shared_ptr<Effect>> effects;
-    
+
     Clip(int clipId) : id(clipId), name("") {}
-    
+
     void setName(const std::string& clipName) { name = clipName; }
-    
+
     std::shared_ptr<Effect> getOrCreateEffect(const std::string& effectName) {
         // Find existing effect
         for (auto& effect : effects) {
@@ -212,13 +86,6 @@ public:
             // Handle clip name specially
             if (endpoint == "name" && !strings.empty()) {
                 setName(strings[0]);
-                return;
-            }
-            
-            // Handle connected status specially
-            if (endpoint == "connect" && !integers.empty()) {
-                connected = (integers[0] == 1);
-                //std::cout << "Clip " << id << " endpoint:" << endpoint << " value: " << integers[0] << std::endl;
                 return;
             }
             
@@ -260,14 +127,13 @@ public:
     
     void clear() {
         name = "";
-        connected = false;
         properties.clear();
         effects.clear();
     }
     
     // Print method for trickle-down printing
     void print(const std::string& indent) const {
-        std::cout << indent << "Clip " << id << ": " << name << (connected ? " [Connected]" : "") << std::endl;
+        std::cout << indent << "Clip " << id << ": " << name << std::endl;
         
         if (!properties.properties.empty()) {
             std::cout << indent << "  Properties:" << std::endl;
@@ -290,7 +156,6 @@ public:
     std::vector<std::shared_ptr<Clip>> clips;
 
     Layer(int layerId) : id(layerId) {
-        // Do not pre-initialize clips to a fixed size.
     }
 
     std::shared_ptr<Clip> getClip(int clipId) {
@@ -305,12 +170,12 @@ public:
         return clips[clipId - 1];
     }
 
-    std::shared_ptr<const Clip> getClip(int clipId) const {
-        if (clipId < 1) return nullptr;
-        if (clipId > static_cast<int>(clips.size())) return nullptr;
-        return clips[clipId - 1];
-    }
-    
+    //std::shared_ptr<const Clip> getClip(int clipId) const {
+    //    if (clipId < 1) return nullptr;
+    //    if (clipId > static_cast<int>(clips.size())) return nullptr;
+    //    return clips[clipId - 1];
+    //}
+
     std::shared_ptr<Effect> getOrCreateEffect(const std::string& effectName) {
         // Find existing effect
         for (auto& effect : effects) {
@@ -326,15 +191,7 @@ public:
         return newEffect;
     }
     
-    int extractNumber(const std::string& str) {
-        std::string numStr = "";
-        for (char c : str) {
-            if (c >= '0' && c <= '9') {
-                numStr += c;
-            }
-        }
-        return numStr.empty() ? 0 : std::stoi(numStr);
-    }
+    
     
     void processOSCMessage(const std::string& address, const std::vector<float>& floats, 
                           const std::vector<int>& integers, const std::vector<std::string>& strings) {
@@ -396,7 +253,7 @@ public:
             }
         }
         
-        // If we get here, store as a general layer property
+        // If we get here, store as a general property
         std::string endpoint = address.substr(1); // Remove leading slash
         properties.setFromOSCData(endpoint, floats, integers, strings);
     }
@@ -436,18 +293,24 @@ public:
 class ResolumeTracker {
 private:
     std::vector<std::shared_ptr<Layer>> layers;
-    PropertyDictionary deckProperties;
-    int selectedColumnId;
-    int connectedColumnId;
-    
+
+    // Centralized selection/connection state
+    int selectedColumnId = 0;
+    int selectedLayerId = 0;
+    int selectedClipLayerId = 0;
+    int selectedClipId = 0;
+    int selectedDeckId = 0;
+    int connectedColumnId = 0;
+    std::vector<int> connectedClipIndices; // index: layer-1, value: connected clip index (1-based, 0 if none)
+
     // Track current deck to detect changes
     int currentDeckId;
     bool deckInitialized;
     
     // Track most recently selected layer and clip
-    int selectedLayerId;
-    int selectedClipLayerId;  // Which layer the selected clip is in
-    int selectedClipId;       // Which clip within that layer
+    int lastSelectedLayerId;
+    int lastSelectedClipLayerId;  // Which layer the selected clip is in
+    int lastSelectedClipId;       // Which clip within that layer
     
     // Track timing to determine which effects bus to use
     enum class LastSelectionType {
@@ -457,15 +320,12 @@ private:
     };
     LastSelectionType lastSelectionType;
     
-    int extractNumber(const std::string& str) {
-        std::string numStr = "";
-        for (char c : str) {
-            if (c >= '0' && c <= '9') {
-                numStr += c;
-            }
-        }
-        return numStr.empty() ? 0 : std::stoi(numStr);
-    }
+    // Deck change callback
+    std::function<void(int, int)> deckChangedCallback;
+
+    // Track previous layer/column counts for change detection
+    int prevLayerCount = 0;
+    int prevColumnCount = 0;
     
     // Helper function to print properties nicely
     void printProperties(const PropertyDictionary& props, const std::string& indent) const {
@@ -480,235 +340,185 @@ private:
                       << " (" << props.getPropertyType(pair.first) << ")" << std::endl;
         }
     }
-    
+
+    // Helper to count columns (max number of clips in any layer)
+    int getColumnCount() const {
+        int maxClips = 0;
+        for (const auto& layer : layers) {
+            if (!layer) continue;
+            int count = 0;
+            for (const auto& clip : layer->clips) {
+                if (clip && !clip->name.empty()) ++count;
+            }
+            if (count > maxClips) maxClips = count;
+        }
+        return maxClips;
+    }
+
+    // Helper to check and trigger callback if needed
+    void checkAndTriggerDeckChanged() {
+        int layerCount = static_cast<int>(layers.size());
+        int columnCount = getColumnCount();
+        if (deckChangedCallback) {
+            std::cout << "Triggering callback" << std::endl;
+            deckChangedCallback(layerCount, columnCount);
+        }
+        prevLayerCount = layerCount;
+        prevColumnCount = columnCount;
+    }
+
+    // Helper to ensure connectedClipIndices matches layer count
+    void ensureConnectedClipIndices() {
+        if (connectedClipIndices.size() != layers.size())
+            connectedClipIndices.resize(layers.size(), 0);
+    }
+
 public:
-    ResolumeTracker() : selectedColumnId(0), connectedColumnId(0), 
-                       currentDeckId(0), deckInitialized(false),
-                       selectedLayerId(0), selectedClipLayerId(0), selectedClipId(0),
-                       lastSelectionType(LastSelectionType::NONE) {
-        // Initialize layers (typically 8-10 layers in Resolume)
+    ResolumeTracker() : currentDeckId(0), deckInitialized(false),
+                       lastSelectedLayerId(0), lastSelectedClipLayerId(0), lastSelectedClipId(0),
+                       lastSelectionType(LastSelectionType::NONE),
+                       prevLayerCount(0), prevColumnCount(0) {
         for (int i = 1; i <= 10; i++) {
             layers.push_back(std::make_shared<Layer>(i));
         }
+        prevLayerCount = static_cast<int>(layers.size());
+        prevColumnCount = getColumnCount();
+        ensureConnectedClipIndices();
     }
     
-    void processOSCMessage(const std::string& address, const std::vector<float>& floats, 
-                          const std::vector<int>& integers, const std::vector<std::string>& strings) {
-        // All messages should start with "/composition"
+    // Setter for deckChangedCallback
+    void setDeckChangedCallback(const std::function<void(int, int)>& cb) {
+        deckChangedCallback = cb;
+    }
+
+    void processOSCMessage(const std::string& address, const std::vector<float>& floats,
+                           const std::vector<int>& integers, const std::vector<std::string>& strings) {
+        // Only process /composition messages
         if (address.find("/composition") != 0) return;
-        
-        // Check for deck selection messages to detect deck changes
+
+        // --- 1. Handle deck selection and deck change ---
         if (address.find("/composition/decks/") == 0) {
-            size_t deckStart = 18; // Length of "/composition/decks/"
+            size_t deckStart = 19; // "/composition/decks/" length
             size_t deckEnd = address.find('/', deckStart);
             if (deckEnd != std::string::npos) {
-                std::string deckPart = address.substr(deckStart, deckEnd - deckStart);
-                int deckId = extractNumber(deckPart);
+                int deckId = extractNumber(address.substr(deckStart, deckEnd - deckStart));
                 std::string remainder = address.substr(deckEnd + 1);
-                
-                // Check if this deck is being selected
-                if (remainder == "select" || remainder == "selected") {
-                    if (!integers.empty() && integers[0] == 1) {
-                        // A deck has been selected
-                        if (deckInitialized && deckId != currentDeckId) {
-                            // Deck has changed, clear all data
-                            std::cout << "Deck changed from " << currentDeckId << " to " << deckId << " - clearing all data" << std::endl;
-                            clearAll();
-                        }
+                if ((remainder == "select" || remainder == "selected") && !integers.empty() && integers[0] == 1) {
+                    if (deckId != currentDeckId) {
+                        clearAll();
                         currentDeckId = deckId;
-                        deckInitialized = true;
+                        if (deckChangedCallback) deckChangedCallback(static_cast<int>(layers.size()), getColumnCount());
                     }
                 }
             }
-            // Don't return here - let deck messages be processed normally below
-        }
-        
-        // Remove "/composition" from the front
-        std::string remainder = address.substr(12); // Length of "/composition"
-        
-        if (remainder.empty()) {
-            // This is a root composition property
             return;
         }
-        
-        // Parse the next part
-        size_t firstSlash = remainder.find('/', 1);
-        std::string firstPart;
-        std::string nextRemainder;
-        
-        if (firstSlash == std::string::npos) {
-            firstPart = remainder.substr(1); // Remove leading slash
-            nextRemainder = "";
-        } else {
-            firstPart = remainder.substr(1, firstSlash - 1);
-            nextRemainder = remainder.substr(firstSlash);
+
+        // Remove "/composition" prefix
+        std::string path = address.substr(12);
+        if (path.empty()) return;
+
+        // Find the endpoint (last part after '/')
+        size_t lastSlash = path.rfind('/');
+        std::string endpoint = (lastSlash != std::string::npos) ? path.substr(lastSlash + 1) : path.substr(1);
+
+        if (endpoint == "selected" || endpoint == "connected") {
+            // Ignore these
+            return;
         }
-        
+
+        bool isSelect = (endpoint == "select");
+        bool isConnect = (endpoint == "connect");
+
+        if ((isSelect || isConnect) && !integers.empty() && integers[0] == 1) {
+            // Determine what is being accessed
+            // /layers/X/clips/Y/select
+            // /layers/X/select
+            // /columns/X/select
+            // /columns/X/connect
+            // /layers/X/clips/Y/connect
+
+            // Parse path parts
+            std::vector<std::string> parts;
+            size_t start = 0, slash;
+            while ((slash = path.find('/', start)) != std::string::npos) {
+                if (slash > start)
+                    parts.push_back(path.substr(start + (start == 0 ? 1 : 0), slash - start - (start == 0 ? 1 : 0)));
+                start = slash;
+            }
+            if (start < path.size())
+                parts.push_back(path.substr(start + 1));
+
+            // Handle columns
+            if (parts.size() >= 2 && parts[0] == "columns") {
+                int columnId = extractNumber(parts[1]);
+                if (isSelect) {
+                    selectedColumnId = columnId;
+                } else if (isConnect) {
+                    connectedColumnId = columnId;
+                    ensureConnectedClipIndices();
+                    // Connect all clips with this column index across all layers
+                    for (size_t i = 0; i < layers.size(); ++i) {
+                        connectedClipIndices[i] = columnId;
+                    }
+                }
+                return;
+            }
+
+            // Handle layers
+            if (parts.size() >= 2 && parts[0] == "layers") {
+                int layerId = extractNumber(parts[1]);
+                if (parts.size() == 2 && isSelect) {
+                    selectedLayerId = layerId;
+                    return;
+                }
+                // /layers/X/clips/Y/select or /connect
+                if (parts.size() >= 4 && parts[2] == "clips") {
+                    int clipId = extractNumber(parts[3]);
+                    if (isSelect) {
+                        selectedClipLayerId = layerId;
+                        selectedClipId = clipId;
+                    } else if (isConnect) {
+                        ensureConnectedClipIndices();
+                        if (layerId >= 1 && layerId <= static_cast<int>(connectedClipIndices.size())) {
+                            connectedClipIndices[layerId - 1] = clipId;
+                        }
+                    }
+                    return;
+                }
+            }
+        }
+
+        // --- 3. Trickledown: pass to appropriate layer/clip/effect ---
+        // Parse first path part
+        size_t firstSlash = path.find('/', 1);
+        std::string firstPart = (firstSlash == std::string::npos) ? path.substr(1) : path.substr(1, firstSlash - 1);
+        std::string nextRemainder = (firstSlash == std::string::npos) ? "" : path.substr(firstSlash);
+
         if (firstPart == "layers") {
-            // Extract layer number and pass remainder to layer
             if (nextRemainder.empty()) return;
-            
             size_t secondSlash = nextRemainder.find('/', 1);
             if (secondSlash == std::string::npos) {
-                // Just /layers/X
                 int layerId = extractNumber(nextRemainder);
                 auto layer = getLayer(layerId);
-                if (layer) {
-                    layer->processOSCMessage("/", floats, integers, strings);
-                }
+                if (layer) layer->processOSCMessage("/", floats, integers, strings);
             } else {
-                // /layers/X/something
                 std::string layerPart = nextRemainder.substr(1, secondSlash - 1);
                 int layerId = extractNumber(layerPart);
                 std::string layerRemainder = nextRemainder.substr(secondSlash);
-                
-                // Check if this is a layer selection
-                if (layerRemainder == "/select" || layerRemainder == "/selected") {
-                    if (!integers.empty() && integers[0] == 1) {
-                        selectedLayerId = layerId;
-                        lastSelectionType = LastSelectionType::LAYER;
-                    }
-                }
-                
-                // Check if this is a clip selection within a layer
-                size_t clipsPos = layerRemainder.find("/clips/");
-                if (clipsPos != std::string::npos) {
-                    size_t clipIdStart = clipsPos + 7; // Length of "/clips/"
-                    size_t clipIdEnd = layerRemainder.find('/', clipIdStart);
-                    if (clipIdEnd != std::string::npos) {
-                        std::string clipIdStr = layerRemainder.substr(clipIdStart, clipIdEnd - clipIdStart);
-                        int clipId = extractNumber(clipIdStr);
-                        std::string clipProperty = layerRemainder.substr(clipIdEnd + 1);
-                        
-                        if (clipProperty == "select" || clipProperty == "selected") {
-                            if (!integers.empty() && integers[0] == 1) {
-                                selectedClipLayerId = layerId;
-                                selectedClipId = clipId;
-                                lastSelectionType = LastSelectionType::CLIP;
-                            }
-                        }
-                    }
-                }
-                
                 auto layer = getLayer(layerId);
-                if (layer) {
-                    layer->processOSCMessage(layerRemainder, floats, integers, strings);
-                }
+                if (layer) layer->processOSCMessage(layerRemainder, floats, integers, strings);
             }
             return;
         }
-        
-        if (firstPart == "decks") {
-            // Handle deck-specific messages (layers within a deck)
-            if (nextRemainder.empty()) return;
-            
-            size_t secondSlash = nextRemainder.find('/', 1);
-            if (secondSlash != std::string::npos) {
-                std::string deckPart = nextRemainder.substr(1, secondSlash - 1);
-                int deckId = extractNumber(deckPart);
-                std::string deckRemainder = nextRemainder.substr(secondSlash);
-                
-                // Check if this is for the current deck
-                if (deckInitialized && deckId == currentDeckId) {
-                    // Process deck-specific messages the same way as composition messages
-                    if (deckRemainder.find("/layers/") == 0) {
-                        // Remove "/layers" and process as layer message
-                        std::string layerRemainder = deckRemainder.substr(7); // Length of "/layers"
-                        
-                        if (!layerRemainder.empty()) {
-                            size_t thirdSlash = layerRemainder.find('/', 1);
-                            if (thirdSlash == std::string::npos) {
-                                // Just /layers/X
-                                int layerId = extractNumber(layerRemainder);
-                                auto layer = getLayer(layerId);
-                                if (layer) {
-                                    layer->processOSCMessage("/", floats, integers, strings);
-                                }
-                            } else {
-                                // /layers/X/something
-                                std::string layerPart = layerRemainder.substr(1, thirdSlash - 1);
-                                int layerId = extractNumber(layerPart);
-                                std::string layerMessages = layerRemainder.substr(thirdSlash);
-                                
-                                // Check for selections
-                                if (layerMessages == "/select" || layerMessages == "/selected") {
-                                    if (!integers.empty() && integers[0] == 1) {
-                                        selectedLayerId = layerId;
-                                        lastSelectionType = LastSelectionType::LAYER;
-                                    }
-                                }
-                                
-                                // Handle clip selections
-                                size_t clipsPos = layerMessages.find("/clips/");
-                                if (clipsPos != std::string::npos) {
-                                    size_t clipIdStart = clipsPos + 7;
-                                    size_t clipIdEnd = layerMessages.find('/', clipIdStart);
-                                    if (clipIdEnd != std::string::npos) {
-                                        std::string clipIdStr = layerMessages.substr(clipIdStart, clipIdEnd - clipIdStart);
-                                        int clipId = extractNumber(clipIdStr);
-                                        std::string clipProperty = layerMessages.substr(clipIdEnd + 1);
-                                        
-                                        if (clipProperty == "select" || clipProperty == "selected") {
-                                            if (!integers.empty() && integers[0] == 1) {
-                                                selectedClipLayerId = layerId;
-                                                selectedClipId = clipId;
-                                                lastSelectionType = LastSelectionType::CLIP;
-                                            }
-                                        }
-                                    }
-                                }
-                                
-                                auto layer = getLayer(layerId);
-                                if (layer) {
-                                    layer->processOSCMessage(layerMessages, floats, integers, strings);
-                                }
-                            }
-                        }
-                    }
-                } else if (!deckInitialized) {
-                    // If no deck has been initialized yet, assume this is the current deck
-                    currentDeckId = deckId;
-                    deckInitialized = true;
-                }
-            }
-            return;
-        }
-        
         if (firstPart == "columns") {
-            // Handle column selection/connection
-            if (nextRemainder.empty()) return;
-            
-            size_t secondSlash = nextRemainder.find('/', 1);
-            if (secondSlash != std::string::npos) {
-                std::string columnPart = nextRemainder.substr(1, secondSlash - 1);
-                int columnId = extractNumber(columnPart);
-                std::string property = nextRemainder.substr(secondSlash + 1);
-                
-                if (property == "select" && !integers.empty()) {
-                    if (integers[0] == 1) {
-                        selectedColumnId = columnId;
-                    } else if (selectedColumnId == columnId) {
-                        selectedColumnId = 0;
-                    }
-                } else if (property == "connect" && !integers.empty()) {
-                    if (integers[0] == 1) {
-                        connectedColumnId = columnId;
-                    } else if (connectedColumnId == columnId) {
-                        connectedColumnId = 0;
-                    }
-                }
-            }
+            // No trickle-down for columns, handled above
             return;
         }
-        
-        if (firstPart == "selectedlayer" || firstPart == "selectedclip" || firstPart == "selectedcolumn") {
-            // These are just references, ignore them
+        if (firstPart == "decks" || firstPart == "selectedlayer" || firstPart == "selectedclip" || firstPart == "selectedcolumn") {
+            // Ignore these
             return;
         }
-        
-        // Everything else goes to deck properties
-        std::string endpoint = remainder.substr(1); // Remove leading slash
-        deckProperties.setFromOSCData(endpoint, floats, integers, strings);
     }
     
     std::shared_ptr<Layer> getLayer(int layerId) {
@@ -726,9 +536,9 @@ public:
     }
     
     // Convenience getters for commonly used values
-    bool isTempoControllerPlaying() const { 
-        return deckProperties.getInt("tempocontroller/play", 0) == 1;
-    }
+    //bool isTempoControllerPlaying() const { 
+    //    return deckProperties.getInt("tempocontroller/play", 0) == 1;
+    //}
     
     int getSelectedColumnId() const { return selectedColumnId; }
     int getConnectedColumnId() const { return connectedColumnId; }
@@ -781,8 +591,8 @@ public:
         return nullptr;
     }
     
-    PropertyDictionary& getDeckProperties() { return deckProperties; }
-    const PropertyDictionary& getDeckProperties() const { return deckProperties; }
+    //PropertyDictionary& getDeckProperties() { return deckProperties; }
+    //const PropertyDictionary& getDeckProperties() const { return deckProperties; }
     
     // Method to manually set/change deck (useful for testing)
     void setCurrentDeck(int deckId) {
@@ -801,33 +611,34 @@ public:
         selectedClipLayerId = 0;
         selectedClipId = 0;
         lastSelectionType = LastSelectionType::NONE;
-        deckProperties.clear();
+        //deckProperties.clear();
         
         for (auto& layer : layers) {
             layer->clear();
         }
+        // Reset previous counts after clearing
+        prevLayerCount = static_cast<int>(layers.size());
+        prevColumnCount = getColumnCount();
     }
     
     // Additional convenience methods for PushUI integration
-    bool hasClip(int column, int layer) const {
+    bool hasClip(int column, int layer) {
         auto layerObj = getLayer(layer);
         if (!layerObj) return false;
         auto clipObj = layerObj->getClip(column);
         return clipObj && !clipObj->name.empty();
     }
     
-    bool isColumnConnected(int column) const {
+    bool isColumnConnected(int column) {
         return getConnectedColumnId() == column;
     }
     
-    bool isClipPlaying(int column, int layer) const {
-        auto layerObj = getLayer(layer);
-        if (!layerObj) return false;
-        auto clipObj = layerObj->getClip(column);
-        return clipObj && clipObj->connected;
+    bool isClipPlaying(int column, int layer) {
+        // Check if the given clip (column) is the connected clip for the given layer
+        return connectedClipIndices.size() >= static_cast<size_t>(layer) && connectedClipIndices[layer - 1] == column;
     }
     
-    bool hasLayerContent(int layer) const {
+    bool hasLayerContent(int layer) {
         auto layerObj = getLayer(layer);
         if (!layerObj) return false;
         
@@ -840,17 +651,7 @@ public:
         }
         return false;
     }
-    
-    int getCurrentDeck() const {
-        // Return current deck number (implement based on your tracker)
-        return 1;  // Placeholder
-    }
-    
-    bool hasDeckChanged() {
-        // Return true if deck has changed since last check
-        return false;  // Placeholder
-    }
-    
+
     // Print method for trickle-down printing
     void print(const std::string& indent = "") const {
         std::cout << indent << "ResolumeTracker:" << std::endl;
@@ -858,10 +659,10 @@ public:
         std::cout << indent << "  Selected Column: " << selectedColumnId << ", Connected Column: " << connectedColumnId << std::endl;
         std::cout << indent << "  Selected Layer: " << selectedLayerId << ", Selected Clip: " << selectedClipId << " (Layer " << selectedClipLayerId << ")" << std::endl;
         
-        if (!deckProperties.properties.empty()) {
-            std::cout << indent << "  Deck Properties:" << std::endl;
-            deckProperties.print(indent + "    ");
-        }
+        //if (!deckProperties.properties.empty()) {
+        //    std::cout << indent << "  Deck Properties:" << std::endl;
+        //    deckProperties.print(indent + "    ");
+        //}
         
         if (!layers.empty()) {
             std::cout << indent << "  Layers:" << std::endl;
@@ -871,4 +672,3 @@ public:
         }
     }
 };
-

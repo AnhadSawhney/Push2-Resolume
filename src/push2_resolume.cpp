@@ -256,7 +256,7 @@ int main(int argc, char* argv[]) {
                 resolumeTracker.clearAll();
                 std::cout << "Cleared all state" << std::endl;
             } else if (input == "status") {
-                std::cout << "Tempo controller playing: " << (resolumeTracker.isTempoControllerPlaying() ? "Yes" : "No") << std::endl;
+                //std::cout << "Tempo controller playing: " << (resolumeTracker.isTempoControllerPlaying() ? "Yes" : "No") << std::endl;
                 std::cout << "Selected layer: " << resolumeTracker.getSelectedLayerId() << std::endl;
                 auto selectedClip = resolumeTracker.getSelectedClip();
                 std::cout << "Selected clip: layer " << selectedClip.first << ", clip " << selectedClip.second << std::endl;

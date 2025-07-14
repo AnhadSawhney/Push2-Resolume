@@ -41,6 +41,8 @@ private:
     PushDisplay* display;
     int columnOffset;
     int layerOffset;
+    int numLayers;  // Total number of layers in the current deck
+    int numColumns; // Total number of columns in the current deck
     enum PushControls {
         BTN_OCTAVE_UP = 55,
         BTN_OCTAVE_DOWN = 54,
@@ -52,6 +54,14 @@ private:
     };
     int lastKnownDeck;
     bool trackingInitialized;
+
+    // Add mode enum and member
+    enum class Mode {
+        Triggering,
+        Selecting
+    };
+    Mode mode = Mode::Triggering;
+
 public:
     PushUI(PushUSB& push, ResolumeTracker& tracker, std::unique_ptr<OSCSender> osc = nullptr);
     ~PushUI();
@@ -62,15 +72,18 @@ public:
     void update();
     void onMidiMessage(const PushMidiMessage& msg);
     void forceRefresh();
+
+    // Mode accessors
+    Mode getMode() const { return mode; }
+    void setMode(Mode m) { mode = m; }
+    void toggleMode();
+
 private:
-    void checkForDeckChange();
-    void resetNavigation();
     void handlePadPress(int note, int velocity);
     void handleNavigationButtons(int controller, int value);
-    bool canMoveLayerUp() const;
-    bool canMoveLayerDown() const;
-    bool canMoveColumnRight() const;
-    bool canMoveColumnLeft() const;
-    void triggerClip(int layer, int column);
+    inline bool canMoveLayerUp() { return layerOffset + 8 < numLayers; };
+    inline bool canMoveLayerDown() { return layerOffset > 0; };
+    inline bool canMoveColumnRight() { return columnOffset + 8 < numColumns; };
+    inline bool canMoveColumnLeft() { return columnOffset > 0; };
 };
 

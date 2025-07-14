@@ -6,12 +6,24 @@
 PushUI::PushUI(PushUSB& push, ResolumeTracker& tracker, std::unique_ptr<OSCSender> osc)
     : pushDevice(push), resolumeTracker(tracker), oscSender(std::move(osc)),
       columnOffset(0), layerOffset(0),
-      lastKnownDeck(-1), trackingInitialized(false)
+      lastKnownDeck(-1), trackingInitialized(false),
+      numLayers(0), numColumns(0), mode(Mode::Triggering) // <-- add members for layer/column count
 {
     lights = new PushLights(pushDevice);
     display = new PushDisplay(pushDevice);
     lights->setParentUI(this);
     display->setParentUI(this);
+
+    // Register deckChangedCallback to update numLayers/numColumns
+    resolumeTracker.setDeckChangedCallback([this](int layers, int columns) {
+        this->numLayers = layers;
+        this->numColumns = columns;
+        // Optionally reset navigation if out of bounds
+        if (layerOffset > std::max(0, numLayers - 8)) layerOffset = std::max(0, numLayers - 8);
+        if (columnOffset > std::max(0, numColumns - 8)) columnOffset = std::max(0, numColumns - 8);
+
+        std::cout << "Deck changed. Layers: " << layers << ", Columns: " << columns << std::endl;
+    });
 }
 
 PushUI::~PushUI() {
@@ -31,7 +43,6 @@ bool PushUI::initialize() {
     });
     lights->clearAllPads();
     lights->clearAllButtons();
-    resetNavigation();
     std::cout << "PushUI initialized successfully" << std::endl;
     return true;
 }
@@ -41,10 +52,17 @@ int PushUI::getLayerOffset() const { return layerOffset; }
 ResolumeTracker& PushUI::getResolumeTracker() { return resolumeTracker; }
 
 void PushUI::update() {
-    checkForDeckChange();
     lights->updateLights();
     display->update();
     display->sendToDevice();
+}
+
+void PushUI::toggleMode() {
+    if (mode == Mode::Triggering) {
+        mode = Mode::Selecting;
+    } else {
+        mode = Mode::Triggering;
+    }
 }
 
 void PushUI::onMidiMessage(const PushMidiMessage& msg) {
@@ -53,16 +71,35 @@ void PushUI::onMidiMessage(const PushMidiMessage& msg) {
     } else if (msg.isControlChange()) {
         int cc = msg.getController();
         int value = msg.getValue();
+
+        // Master button (cc28) toggles mode
+        if (cc == 28 && value > 0) {
+            toggleMode();
+            return;
+        }
+
+        // Column buttons
         if (cc >= 20 && cc <= 27 && value > 0) {
             int column = columnOffset + (cc - 20) + 1;
-            std::string address = "/composition/columns/" + std::to_string(column) + "/connect";
-            if (oscSender) {
-                oscSender->sendMessage(address, 1.0f);
+            if (mode == Mode::Selecting) {
+                std::string address = "/composition/columns/" + std::to_string(column) + "/select";
+                if (oscSender) {
+                    oscSender->sendMessage(address, 1.0f);
+                } else {
+                    std::cout << "Would select: " << address << std::endl;
+                }
             } else {
-                std::cout << "Would trigger: " << address << std::endl;
+                std::string address = "/composition/columns/" + std::to_string(column) + "/connect";
+                if (oscSender) {
+                    oscSender->sendMessage(address, 1.0f);
+                } else {
+                    std::cout << "Would trigger: " << address << std::endl;
+                }
             }
             return;
         }
+
+        // Layer buttons
         if (cc >= 36 && cc <= 43 && value > 0) {
             int layer = layerOffset + (cc - 36) + 1;
             std::string address = "/composition/layers/" + std::to_string(layer) + "/select";
@@ -73,6 +110,7 @@ void PushUI::onMidiMessage(const PushMidiMessage& msg) {
             }
             return;
         }
+
         handleNavigationButtons(cc, value);
     }
 }
@@ -80,24 +118,6 @@ void PushUI::onMidiMessage(const PushMidiMessage& msg) {
 void PushUI::forceRefresh() {
     lights->forceRefresh();
     lights->updateLights();
-}
-
-void PushUI::checkForDeckChange() {
-    int currentDeck = resolumeTracker.getCurrentDeckId();
-    if (!trackingInitialized) {
-        lastKnownDeck = currentDeck;
-        trackingInitialized = true;
-    } else if (resolumeTracker.isDeckInitialized() && currentDeck != lastKnownDeck) {
-        std::cout << "Deck changed from " << lastKnownDeck << " to " << currentDeck << " - resetting navigation" << std::endl;
-        resetNavigation();
-        lastKnownDeck = currentDeck;
-    }
-}
-
-void PushUI::resetNavigation() {
-    columnOffset = 0;
-    layerOffset = 0;
-    std::cout << "Navigation reset to origin (Column 1, Layer 1)" << std::endl;
 }
 
 void PushUI::handlePadPress(int note, int velocity) {
@@ -108,82 +128,39 @@ void PushUI::handlePadPress(int note, int velocity) {
         int gridCol = padIndex % 8;
         int resolumeLayer = gridRow + 1 + layerOffset;
         int resolumeColumn = gridCol + 1 + columnOffset;
-        //std::cout << "Pad pressed: Grid(" << gridRow << "," << gridCol << ") -> "
-        //          << "Resolume Layer " << resolumeLayer << ", Column " << resolumeColumn << std::endl;
-        triggerClip(resolumeLayer, resolumeColumn);
+        if (mode == Mode::Selecting) {
+            // Select the clip
+            std::string address = "/composition/layers/" + std::to_string(resolumeLayer) +
+                                  "/clips/" + std::to_string(resolumeColumn) + "/select";
+            if (oscSender) {
+                oscSender->sendMessage(address, 1.0f);
+            } else {
+                std::cout << "Would select: " << address << std::endl;
+            }
+        } else {
+            // Trigger the clip
+            std::string address = "/composition/layers/" + std::to_string(resolumeLayer) +
+                             "/clips/" + std::to_string(resolumeColumn) + "/connect";
+            if (oscSender) {
+                oscSender->sendMessage(address, 1.0f);
+            } else {
+                std::cout << "Would trigger: " << address << std::endl;
+            }
+        }
     }
 }
 
 void PushUI::handleNavigationButtons(int controller, int value) {
     if (value == 0) return;
-    switch (controller) {
-        case BTN_OCTAVE_UP:
-            if (canMoveLayerUp()) {
-                layerOffset++;
-                //std::cout << "Layer offset increased to " << layerOffset << " (showing layers "
-                //          << (layerOffset + 1) << "-" << (layerOffset + 8) << ")" << std::endl;
-            }
-            break;
-        case BTN_OCTAVE_DOWN:
-            if (canMoveLayerDown()) {
-                layerOffset--;
-                //std::cout << "Layer offset decreased to " << layerOffset << " (showing layers "
-                //          << (layerOffset + 1) << "-" << (layerOffset + 8) << ")" << std::endl;
-            }
-            break;
-        case BTN_PAGE_RIGHT:
-            if (canMoveColumnRight()) {
-                columnOffset++;
-                //std::cout << "Column offset increased to " << columnOffset << " (showing columns "
-                //          << (columnOffset + 1) << "-" << (columnOffset + 8) << ")" << std::endl;
-            }
-            break;
-        case BTN_PAGE_LEFT:
-            if (canMoveColumnLeft()) {
-                columnOffset--;
-                //std::cout << "Column offset decreased to " << columnOffset << " (showing columns "
-                //          << (columnOffset + 1) << "-" << (columnOffset + 8) << ")" << std::endl;
-            }
-            break;
+    if (controller == BTN_OCTAVE_UP && canMoveLayerUp()) {
+        layerOffset++;
+    } else if (controller == BTN_OCTAVE_DOWN && canMoveLayerDown()) {
+        layerOffset--;
+    } else if (controller == BTN_PAGE_RIGHT && canMoveColumnRight()) {
+        columnOffset++;
+    } else if (controller == BTN_PAGE_LEFT && canMoveColumnLeft()) {
+        columnOffset--;
     }
 }
 
-bool PushUI::canMoveLayerUp() const {
-    for (int i = 1; i <= 8; i++) {
-        int checkLayer = layerOffset + 8 + i;
-        if (resolumeTracker.hasLayerContent(checkLayer)) {
-            return true;
-        }
-    }
-    return false;
-}
 
-bool PushUI::canMoveLayerDown() const {
-    return layerOffset > 0;
-}
-
-bool PushUI::canMoveColumnRight() const {
-    for (int i = 1; i <= 8; i++) {
-        int checkColumn = columnOffset + 8 + i;
-        for (int layer = 1; layer <= 32; layer++) {
-            if (resolumeTracker.hasClip(checkColumn, layer)) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-bool PushUI::canMoveColumnLeft() const {
-    return columnOffset > 0;
-}
-
-void PushUI::triggerClip(int layer, int column) {
-    std::string address = "/composition/layers/" + std::to_string(layer) +
-                             "/clips/" + std::to_string(column) + "/connect";
-    if (oscSender) {
-        oscSender->sendMessage(address, 1.0f);
-    } else {
-        std::cout << "Would trigger: " << address << std::endl;
-    }
-}
