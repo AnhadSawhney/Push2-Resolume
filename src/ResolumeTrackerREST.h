@@ -1,5 +1,8 @@
 #pragma once
 
+#define TRACKING_WITH_REST
+#ifndef TRACKING_WITH_OSC
+
 #include <string>
 #include <vector>
 #include "httplib.h"           // https://github.com/yhirose/cpp-httplib
@@ -324,3 +327,5 @@ private:
         return out;
     }
 };
+
+#endif // TRACKING_WITH_OSC

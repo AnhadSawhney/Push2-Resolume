@@ -5,19 +5,97 @@
 #include "osc/OscPacketListener.h"
 #include "ip/UdpSocket.h"
 #include "ip/IpEndpointName.h"
-#include "ResolumeTrackerOSC.h"
+#include <mutex>
+#include <condition_variable>
+#include <map>
+#include <functional>
+
+// Forward declaration
+class OSCSender;
 
 using namespace osc;
 
+struct QueryResult {
+    bool hasValue = false;
+    std::vector<float> floats;
+    std::vector<int> integers;
+    std::vector<std::string> strings;
+};
+
 class ResolumeOSCListener : public OscPacketListener {
 private:
-    ResolumeTracker& tracker;
-    //PushUI* pushUI;  // Add reference to PushUI
+    std::function<void(const std::string&, const std::vector<float>&, const std::vector<int>&, const std::vector<std::string>&)> messageCallback;
+    OSCSender* oscSender;
+    
+    // Query mechanism
+    std::mutex queryMutex;
+    std::condition_variable queryCondition;
+    std::map<std::string, QueryResult> pendingQueries;
     
 public:
-    ResolumeOSCListener(ResolumeTracker& resolumeTracker) : tracker(resolumeTracker) {} //, pushUI(nullptr)
+    ResolumeOSCListener(OSCSender* sender = nullptr) 
+        : oscSender(sender) {}
     
-    //void setPushUI(PushUI* ui) { pushUI = ui; }
+    void setOSCSender(OSCSender* sender) { oscSender = sender; }
+    
+    void setMessageCallback(std::function<void(const std::string&, const std::vector<float>&, const std::vector<int>&, const std::vector<std::string>&)> callback) {
+        messageCallback = callback;
+    }
+    
+    // Blocking query function
+    QueryResult query(const std::string& address, int timeoutMs = 5000) {
+        if (!oscSender) {
+            throw std::runtime_error("OSCSender not set");
+        }
+        
+        std::unique_lock<std::mutex> lock(queryMutex);
+        
+        // Clear any existing result for this address
+        pendingQueries[address] = QueryResult{};
+        
+        // Send query
+        oscSender->sendMessage(address, std::string("?"));
+        
+        // Wait for response
+        bool received = queryCondition.wait_for(lock, std::chrono::milliseconds(timeoutMs), 
+            [this, &address]() { 
+                return pendingQueries[address].hasValue; 
+            });
+        
+        if (!received) {
+            pendingQueries.erase(address);
+            throw std::runtime_error("Query timeout for address: " + address);
+        }
+        
+        QueryResult result = pendingQueries[address];
+        pendingQueries.erase(address);
+        return result;
+    }
+    
+    // Convenience wrappers for specific types
+    int QueryInt(const std::string& address, int timeoutMs = 5000) {
+        QueryResult result = query(address, timeoutMs);
+        if (result.integers.empty()) {
+            throw std::runtime_error("No integer value received for address: " + address);
+        }
+        return result.integers[0];
+    }
+    
+    float QueryFloat(const std::string& address, int timeoutMs = 5000) {
+        QueryResult result = query(address, timeoutMs);
+        if (result.floats.empty()) {
+            throw std::runtime_error("No float value received for address: " + address);
+        }
+        return result.floats[0];
+    }
+    
+    std::string QueryString(const std::string& address, int timeoutMs = 5000) {
+        QueryResult result = query(address, timeoutMs);
+        if (result.strings.empty()) {
+            throw std::runtime_error("No string value received for address: " + address);
+        }
+        return result.strings[0];
+    }
     
 protected:
     virtual void ProcessMessage(const ReceivedMessage& m, const IpEndpointName& remoteEndpoint) override {
@@ -40,8 +118,23 @@ protected:
                 ++arg;
             }
             
-            // Send to tracker
-            tracker.processOSCMessage(address, floats, integers, strings);
+            // Check if this is a response to a pending query
+            {
+                std::lock_guard<std::mutex> lock(queryMutex);
+                auto it = pendingQueries.find(address);
+                if (it != pendingQueries.end() && !it->second.hasValue) {
+                    it->second.hasValue = true;
+                    it->second.floats = floats;
+                    it->second.integers = integers;
+                    it->second.strings = strings;
+                    queryCondition.notify_all();
+                }
+            }
+            
+            // Send to callback if set
+            if (messageCallback) {
+                messageCallback(address, floats, integers, strings);
+            }
             
             // Debug output
             #ifdef DEBUG_OSC

@@ -11,7 +11,9 @@
 #include "OSCSender.h"
 #include "PushUI.h"
 #include "PushUSB.h"
-#include "ResolumeTrackerREST.h"
+//#include "ResolumeTrackerREST.h"
+#include "ResolumeTrackerOSC.h"
+#include "OSCListener.h"
 
 // ------------------------
 // main()
@@ -92,13 +94,14 @@ int main(int argc, char* argv[]) {
         }
 
         // Create OSC listener
-        //ResolumeOSCListener listener(resolumeTracker);
-        //if (pushUI) {
-        //    listener.setPushUI(pushUI.get());
-        //}
+        ResolumeOSCListener listener(oscSender.get());
+        listener.setMessageCallback([&resolumeTracker](const std::string& address, const std::vector<float>& floats,
+                           const std::vector<int>& integers, const std::vector<std::string>& strings) {
+            resolumeTracker.processOSCMessage(address, floats, integers, strings);
+        });
         
         // Create UDP socket for receiving OSC messages
-        //UdpListeningReceiveSocket socket(IpEndpointName(IpEndpointName::ANY_ADDRESS, incomingOscPort), &listener);
+        UdpListeningReceiveSocket socket(IpEndpointName(IpEndpointName::ANY_ADDRESS, incomingOscPort), &listener);
 
         std::cout << "Push2-Resolume Controller starting..." << std::endl;
         std::cout << "Listening for OSC messages on port " << incomingOscPort << std::endl;
@@ -107,13 +110,13 @@ int main(int argc, char* argv[]) {
         
         // Start listening in a separate thread
         std::atomic<bool> shouldStop(false);
-        //std::thread oscThread([&socket, &shouldStop]() {
-        //    try {
-        //        socket.RunUntilSigInt();
-        //    } catch (...) {
-        //        shouldStop.store(true);
-        //    }
-        //});
+        std::thread oscThread([&socket, &shouldStop]() {
+            try {
+                socket.RunUntilSigInt();
+            } catch (...) {
+                shouldStop.store(true);
+            }
+        });
         
         // Main update loop
         std::thread updateThread([&pushUI, &shouldStop]() {

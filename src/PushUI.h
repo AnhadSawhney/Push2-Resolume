@@ -14,7 +14,8 @@
 #include <iostream>
 
 #include "PushUSB.h"
-#include "ResolumeTrackerREST.h"
+//#include "ResolumeTrackerREST.h"
+#include "ResolumeTrackerOSC.h"
 
 // Forward declarations for OSC functionality
 class OSCSender {

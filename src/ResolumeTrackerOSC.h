@@ -1,5 +1,8 @@
 #pragma once
 
+#define TRACKING_WITH_OSC
+#ifndef TRACKING_WITH_REST
+
 #include <vector>
 #include <string>
 #include <map>
@@ -10,14 +13,30 @@
 #include <functional>
 #include "PropertyDictionary.h"
 
-inline int extractNumber(const std::string& str) {
-    std::string numStr = "";
-    for (char c : str) {
-        if (c >= '0' && c <= '9') {
-            numStr += c;
+// Helper function to split OSC address into path components
+inline std::vector<std::string> splitOSCPath(const std::string& address) {
+    std::vector<std::string> parts;
+    if (address.empty() || address[0] != '/') return parts;
+    
+    size_t start = 1; // Skip initial slash
+    size_t pos = start;
+    
+    while (pos < address.length()) {
+        if (address[pos] == '/') {
+            if (pos > start) {
+                parts.push_back(address.substr(start, pos - start));
+            }
+            start = pos + 1;
         }
+        pos++;
     }
-    return numStr.empty() ? 0 : std::stoi(numStr);
+    
+    // Add final part if exists
+    if (start < address.length()) {
+        parts.push_back(address.substr(start));
+    }
+    
+    return parts;
 }
 
 class Effect {
@@ -29,10 +48,20 @@ public:
     Effect(int effectId, const std::string& effectName) 
         : id(effectId), name(effectName) {}
     
-    void processOSCMessage(const std::string& address, const std::vector<float>& floats, 
+    void processOSCMessage(const std::vector<std::string>& pathParts, const std::vector<float>& floats, 
                           const std::vector<int>& integers, const std::vector<std::string>& strings) {
-        std::string endpoint = address.substr(1); // Remove leading slash
-        properties.setFromOSCData(endpoint, floats, integers, strings);
+        if (pathParts.empty()) {
+            // Root effect property
+            properties.setFromOSCData("", floats, integers, strings);
+        } else {
+            // Build endpoint from remaining path
+            std::string endpoint = "";
+            for (size_t i = 0; i < pathParts.size(); ++i) {
+                if (i > 0) endpoint += "/";
+                endpoint += pathParts[i];
+            }
+            properties.setFromOSCData(endpoint, floats, integers, strings);
+        }
     }
     
     void clear() {
@@ -75,53 +104,39 @@ public:
         return newEffect;
     }
     
-    void processOSCMessage(const std::string& address, const std::vector<float>& floats, 
+    void processOSCMessage(const std::vector<std::string>& pathParts, const std::vector<float>& floats, 
                           const std::vector<int>& integers, const std::vector<std::string>& strings) {
-        // Parse the address to find what we're dealing with
-        size_t firstSlash = address.find('/', 1);
-        if (firstSlash == std::string::npos) {
-            // This is a direct property of the clip
-            std::string endpoint = address.substr(1); // Remove leading slash
-            
-            // Handle clip name specially
-            if (endpoint == "name" && !strings.empty()) {
-                setName(strings[0]);
-                return;
-            }
-            
-            // Store other properties in dictionary
-            properties.setFromOSCData(endpoint, floats, integers, strings);
+        if (pathParts.empty()) {
+            // Direct clip property
+            properties.setFromOSCData("", floats, integers, strings);
             return;
         }
         
-        std::string firstPart = address.substr(1, firstSlash - 1);
-        std::string remainder = address.substr(firstSlash);
+        std::vector<std::string> parts = pathParts; // Make a copy to modify
         
-        if (firstPart == "video") {
-            // Look for /video/effects/effectname
-            size_t effectsPos = remainder.find("/effects/");
-            if (effectsPos != std::string::npos) {
-                size_t effectNameStart = effectsPos + 9; // Length of "/effects/"
-                size_t effectNameEnd = remainder.find('/', effectNameStart);
-                
-                if (effectNameEnd == std::string::npos) {
-                    // Effect name is at the end
-                    std::string effectName = remainder.substr(effectNameStart);
-                    auto effect = getOrCreateEffect(effectName);
-                    effect->processOSCMessage("/", floats, integers, strings);
-                } else {
-                    // There's more after the effect name
-                    std::string effectName = remainder.substr(effectNameStart, effectNameEnd - effectNameStart);
-                    std::string effectRemainder = remainder.substr(effectNameEnd);
-                    auto effect = getOrCreateEffect(effectName);
-                    effect->processOSCMessage(effectRemainder, floats, integers, strings);
-                }
-                return;
-            }
+        // Handle clip name specially
+        if (parts.size() == 1 && parts[0] == "name" && !strings.empty()) {
+            setName(strings[0]);
+            return;
         }
         
-        // If we get here, store as a general property
-        std::string endpoint = address.substr(1); // Remove leading slash
+        if (parts[0] == "video" && parts.size() >= 3 && parts[1] == "effects") {
+            // /video/effects/effectname/...
+            std::string effectName = parts[2];
+            auto effect = getOrCreateEffect(effectName);
+            
+            // Remove "video", "effects", and effect name from path
+            std::vector<std::string> remainingPath(parts.begin() + 3, parts.end());
+            effect->processOSCMessage(remainingPath, floats, integers, strings);
+            return;
+        }
+        
+        // Store as general property
+        std::string endpoint = "";
+        for (size_t i = 0; i < parts.size(); ++i) {
+            if (i > 0) endpoint += "/";
+            endpoint += parts[i];
+        }
         properties.setFromOSCData(endpoint, floats, integers, strings);
     }
     
@@ -193,66 +208,45 @@ public:
     
     
     
-    void processOSCMessage(const std::string& address, const std::vector<float>& floats, 
+    void processOSCMessage(const std::vector<std::string>& pathParts, const std::vector<float>& floats, 
                           const std::vector<int>& integers, const std::vector<std::string>& strings) {
-        // Parse the address to find what we're dealing with
-        std::cout << "Layer::processOSCMessage: " << address << std::endl;
-        
-        size_t firstSlash = address.find('/', 1);
-        if (firstSlash == std::string::npos) {
-            // This is a direct property of the layer
-            std::string endpoint = address.substr(1); // Remove leading slash
-            properties.setFromOSCData(endpoint, floats, integers, strings);
+        if (pathParts.empty()) {
+            // Direct layer property
+            properties.setFromOSCData("", floats, integers, strings);
             return;
         }
         
-        std::string firstPart = address.substr(1, firstSlash - 1);
-        std::string remainder = address.substr(firstSlash);
-
-        //std::cout << "Layer::processOSCMessage: address=" << address << " firstPart=" << firstPart << " remainder=" << remainder << std::endl;
-
-        if (firstPart == "clips") {
-            // Extract clip number and pass remainder to clip
-            size_t secondSlash = remainder.find('/', 1);
-            // /clips/X/something
-            std::string clipPart = remainder.substr(1, secondSlash - 1);
-            int clipId = extractNumber(clipPart);
-            std::string clipRemainder = remainder.substr(secondSlash);
-
-            //std::cout << "Clips message: " << address << " ID=" << clipId << " Remainder=" << clipRemainder << std::endl;
-
+        std::vector<std::string> parts = pathParts; // Make a copy to modify
+        
+        if (parts[0] == "clips" && parts.size() >= 2) {
+            // /clips/X/...
+            int clipId = std::stoi(parts[1]);
             auto clip = getOrCreateClip(clipId);
             if (clip) {
-                clip->processOSCMessage(clipRemainder, floats, integers, strings);
+                // Remove "clips" and clip number from path
+                std::vector<std::string> remainingPath(parts.begin() + 2, parts.end());
+                clip->processOSCMessage(remainingPath, floats, integers, strings);
             }
             return;
         }
         
-        if (firstPart == "video") {
-            // Look for /video/effects/effectname
-            size_t effectsPos = remainder.find("/effects/");
-            if (effectsPos != std::string::npos) {
-                size_t effectNameStart = effectsPos + 9; // Length of "/effects/"
-                size_t effectNameEnd = remainder.find('/', effectNameStart);
-                
-                if (effectNameEnd == std::string::npos) {
-                    // Effect name is at the end
-                    std::string effectName = remainder.substr(effectNameStart);
-                    auto effect = getOrCreateEffect(effectName);
-                    effect->processOSCMessage("/", floats, integers, strings);
-                } else {
-                    // There's more after the effect name
-                    std::string effectName = remainder.substr(effectNameStart, effectNameEnd - effectNameStart);
-                    std::string effectRemainder = remainder.substr(effectNameEnd);
-                    auto effect = getOrCreateEffect(effectName);
-                    effect->processOSCMessage(effectRemainder, floats, integers, strings);
-                }
-                return;
-            }
+        if (parts[0] == "video" && parts.size() >= 3 && parts[1] == "effects") {
+            // /video/effects/effectname/...
+            std::string effectName = parts[2];
+            auto effect = getOrCreateEffect(effectName);
+            
+            // Remove "video", "effects", and effect name from path
+            std::vector<std::string> remainingPath(parts.begin() + 3, parts.end());
+            effect->processOSCMessage(remainingPath, floats, integers, strings);
+            return;
         }
         
-        // If we get here, store as a general property
-        std::string endpoint = address.substr(1); // Remove leading slash
+        // Store as general property
+        std::string endpoint = "";
+        for (size_t i = 0; i < parts.size(); ++i) {
+            if (i > 0) endpoint += "/";
+            endpoint += parts[i];
+        }
         properties.setFromOSCData(endpoint, floats, integers, strings);
     }
     
@@ -364,71 +358,42 @@ public:
         // Only process /composition messages
         if (address.find("/composition") != 0) return;
 
+        // Split the address into components
+        std::vector<std::string> pathParts = splitOSCPath(address);
+        
+        // Remove "composition" from the beginning
+        if (pathParts.empty() || pathParts[0] != "composition") return;
+        pathParts.erase(pathParts.begin());
+
+        if (pathParts.empty()) return;
+
         // --- 1. Handle deck selection and deck change ---
-        if (address.find("/composition/decks/") == 0) {
-            size_t deckStart = 19; // "/composition/decks/" length
-            size_t deckEnd = address.find('/', deckStart);
-            if (deckEnd != std::string::npos) {
-                int deckId = extractNumber(address.substr(deckStart, deckEnd - deckStart));
-                std::string remainder = address.substr(deckEnd + 1);
-                std::cout << "Deck Message: " << address << " Deck ID: " << deckId << " remainder: " << remainder << std::endl;
-                if ((remainder == "select") && !integers.empty() && integers[0] == 1) {
-                    if (deckId != currentDeckId) {
-                        clearAll();
-                        currentDeckId = deckId;
-                        //if (deckChangedCallback) deckChangedCallback(static_cast<int>(layers.size()), getColumnCount());
-                    }
+        if (pathParts[0] == "decks" && pathParts.size() >= 3) {
+            int deckId = std::stoi(pathParts[1]);
+            if (pathParts[2] == "select" && !integers.empty() && integers[0] == 1) {
+                if (deckId != currentDeckId) {
+                    clear();
+                    currentDeckId = deckId;
                 }
             }
             return;
         }
 
-        // Remove "/composition" prefix
-        std::string path = address.substr(12);
-        if (path.empty()) return;
-
-        // Find the endpoint (last part after '/')
-        size_t lastSlash = path.rfind('/');
-        std::string endpoint = (lastSlash != std::string::npos) ? path.substr(lastSlash + 1) : path.substr(1);
-
-        if (endpoint == "selected" || endpoint == "connected") {
-            // Ignore these
-            return;
-        }
-
+        // Check for select/connect messages
+        std::string endpoint = pathParts.back();
         bool isSelect = (endpoint == "select");
         bool isConnect = (endpoint == "connect");
 
         if ((isSelect || isConnect) && !integers.empty() && integers[0] == 1) {
             std::cout << "Select/Connect Message: " << address << std::endl;
 
-            // Determine what is being accessed
-            // /layers/X/clips/Y/select
-            // /layers/X/select
-            // /columns/X/select
-            // /columns/X/connect
-            // /layers/X/clips/Y/connect
-
-            // Parse path parts
-            std::vector<std::string> parts;
-            size_t start = 0, slash;
-            while ((slash = path.find('/', start)) != std::string::npos) {
-                if (slash > start)
-                    parts.push_back(path.substr(start + (start == 0 ? 1 : 0), slash - start - (start == 0 ? 1 : 0)));
-                start = slash;
-            }
-            if (start < path.size())
-                parts.push_back(path.substr(start + 1));
-
-            // Handle columns
-            if (parts.size() >= 2 && parts[0] == "columns") {
-                int columnId = extractNumber(parts[1]);
+            if (pathParts[0] == "columns" && pathParts.size() >= 2) {
+                int columnId = std::stoi(pathParts[1]);
                 if (isSelect) {
                     selectedColumnId = columnId;
                 } else if (isConnect) {
                     connectedColumnId = columnId;
                     ensureConnectedClipIndices();
-                    // Connect all clips with this column index across all layers
                     for (size_t i = 0; i < layers.size(); ++i) {
                         connectedClipIndices[i] = columnId;
                     }
@@ -436,16 +401,16 @@ public:
                 return;
             }
 
-            // Handle layers
-            if (parts.size() >= 2 && parts[0] == "layers") {
-                int layerId = extractNumber(parts[1]);
-                if (parts.size() == 2 && isSelect) {
+            if (pathParts[0] == "layers" && pathParts.size() >= 2) {
+                int layerId = std::stoi(pathParts[1]);
+                if (pathParts.size() == 3 && isSelect) {
+                    // /layers/X/select
                     selectedLayerId = layerId;
                     return;
                 }
-                // /layers/X/clips/Y/select or /connect
-                if (parts.size() >= 4 && parts[2] == "clips") {
-                    int clipId = extractNumber(parts[3]);
+                if (pathParts.size() >= 4 && pathParts[2] == "clips") {
+                    // /layers/X/clips/Y/select or /connect
+                    int clipId = std::stoi(pathParts[3]);
                     if (isSelect) {
                         selectedClipLayerId = layerId;
                         selectedClipId = clipId;
@@ -460,33 +425,27 @@ public:
             }
         }
 
+        // Skip certain endpoints
+        if (endpoint == "selected" || endpoint == "connected") {
+            return;
+        }
+
         // --- 3. Trickledown: pass to appropriate layer/clip/effect ---
-        // Parse first path part
-        size_t firstSlash = path.find('/', 1);
-        std::string firstPart = (firstSlash == std::string::npos) ? path.substr(1) : path.substr(1, firstSlash - 1);
-        std::string nextRemainder = (firstSlash == std::string::npos) ? "" : path.substr(firstSlash);
-
-        //std::cout << "General Message: " << address << " firstPart: " << firstPart << " remainder: " << nextRemainder << std::endl;
-
-        if (firstPart == "layers") {
-            std::cout << "layers message: " << address << std::endl;
-            
-            if (nextRemainder.empty()) return;
-            size_t secondSlash = nextRemainder.find('/', 1);
-            if (secondSlash != std::string::npos) {
-                int layerId = extractNumber(nextRemainder);
-                auto layer = getLayer(layerId);
-                //std::cout << "Layer Message: " << address << " Layer ID: " << layerId << std::endl;
-                if (layer) layer->processOSCMessage(nextRemainder.substr(secondSlash), floats, integers, strings);
+        if (pathParts[0] == "layers" && pathParts.size() >= 2) {
+            int layerId = std::stoi(pathParts[1]);
+            auto layer = getLayer(layerId);
+            if (layer) {
+                // Remove "layers" and layer number from path
+                std::vector<std::string> remainingPath(pathParts.begin() + 2, pathParts.end());
+                layer->processOSCMessage(remainingPath, floats, integers, strings);
             }
             return;
         }
-        if (firstPart == "columns") {
-            // No trickle-down for columns, handled above
-            return;
-        }
-        if (firstPart == "decks" || firstPart == "selectedlayer" || firstPart == "selectedclip" || firstPart == "selectedcolumn") {
-            // Ignore these
+
+        // Ignore other top-level paths
+        if (pathParts[0] == "columns" || pathParts[0] == "decks" || 
+            pathParts[0] == "selectedlayer" || pathParts[0] == "selectedclip" || 
+            pathParts[0] == "selectedcolumn") {
             return;
         }
     }
@@ -509,14 +468,12 @@ public:
     //bool isTempoControllerPlaying() const { 
     //    return deckProperties.getInt("tempocontroller/play", 0) == 1;
     //}
-    
-    int getSelectedColumnId() const { return selectedColumnId; }
-    int getConnectedColumnId() const { return connectedColumnId; }
+    int getSelectedLayer() const { return selectedLayerId; }
+    int getSelectedColumn() const { return selectedColumnId; }
+    int getConnectedColumn() const { return connectedColumnId; }
     int getCurrentDeckId() const { return currentDeckId; }
     bool isDeckInitialized() const { return deckInitialized; }
     
-    // New getters for selected layer and clip
-    int getSelectedLayerId() const { return selectedLayerId; }
     
     std::pair<int, int> getSelectedClip() const {
         return std::make_pair(selectedClipLayerId, selectedClipId);
@@ -568,13 +525,13 @@ public:
     void setCurrentDeck(int deckId) {
         if (deckInitialized && deckId != currentDeckId) {
             std::cout << "Manually changing deck from " << currentDeckId << " to " << deckId << " - clearing all data" << std::endl;
-            clearAll();
+            clear();
         }
         currentDeckId = deckId;
         deckInitialized = true;
     }
     
-    void clearAll() {
+    void clear() {
         selectedColumnId = 0;
         connectedColumnId = 0;
         selectedLayerId = 0;
@@ -590,7 +547,7 @@ public:
     }
     
     // Additional convenience methods for PushUI integration
-    bool hasClip(int column, int layer) {
+    bool doesClipExist(int column, int layer) {
         auto layerObj = getLayer(layer);
         if (!layerObj) return false;
         auto clipObj = layerObj->getClip(column);
@@ -598,15 +555,15 @@ public:
     }
     
     bool isColumnConnected(int column) {
-        return getConnectedColumnId() == column;
+        return getConnectedColumn() == column;
     }
     
-    bool isClipPlaying(int column, int layer) {
+    bool isClipConnected(int column, int layer) {
         // Check if the given clip (column) is the connected clip for the given layer
         return connectedClipIndices.size() >= static_cast<size_t>(layer) && connectedClipIndices[layer - 1] == column;
     }
     
-    bool hasLayerContent(int layer) {
+    bool doesLayerExist(int layer) {
         auto layerObj = getLayer(layer);
         if (!layerObj) return false;
 
@@ -639,3 +596,5 @@ public:
         }
     }
 };
+
+#endif // TRACKING_WITH_REST
