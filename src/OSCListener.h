@@ -30,7 +30,7 @@ struct OSCListenerMessage {
 
 class ResolumeOSCListener : public OscPacketListener {
 private:
-    std::function<void(const std::string&, const std::vector<float>&, const std::vector<int>&, const std::vector<std::string>&)> messageCallback;
+    //std::function<void(const std::string&, const std::vector<float>&, const std::vector<int>&, const std::vector<std::string>&)> messageCallback;
     OSCSender* oscSender;
     
     // Query mechanism
@@ -49,9 +49,9 @@ public:
     
     void setOSCSender(OSCSender* sender) { oscSender = sender; }
     
-    void setMessageCallback(std::function<void(const std::string&, const std::vector<float>&, const std::vector<int>&, const std::vector<std::string>&)> callback) {
-        messageCallback = callback;
-    }
+    //void setMessageCallback(std::function<void(const std::string&, const std::vector<float>&, const std::vector<int>&, const std::vector<std::string>&)> callback) {
+    //    messageCallback = callback;
+    //}
     
     // Blocking query function
     OSCListenerMessage query(const std::string& address, int timeoutMs = 50) {
@@ -133,6 +133,12 @@ public:
         OSCListenerMessage message = messageQueue.front();
         messageQueue.pop();
         return message;
+    }
+
+    void clearMessageQueue() {
+        std::lock_guard<std::mutex> lock(queueMutex);
+        std::queue<OSCListenerMessage> empty;
+        std::swap(messageQueue, empty);
     }
 
 protected:

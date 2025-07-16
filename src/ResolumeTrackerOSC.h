@@ -131,6 +131,11 @@ public:
 
     void setName(const std::string& clipName) { name = clipName; }
 
+    bool exists() const {
+        // check if the properties is more than 3
+        return properties.size() > 3;
+    }
+
     std::shared_ptr<Effect> getOrCreateEffect(const std::string& effectName) {
         // Find existing effect
         for (auto& effect : effects) {
@@ -190,8 +195,8 @@ public:
     
     // Print method for trickle-down printing
     void print(const std::string& indent) const {
-        std::cout << indent << "Clip " << id << ": " << name << std::endl;
-        
+        std::cout << indent << "Clip " << id << ": <" << name << ">" << (exists() ? " exists" : "") << std::endl;
+
         if (!properties.properties.empty()) {
             std::cout << indent << "  Properties:" << std::endl;
             properties.print(indent + "    ");
@@ -374,11 +379,11 @@ private:
                 if (message.has_value()) {
                     processOSCMessage(message->address, message->floats, message->integers, message->strings);
                 } else {
-                    // No messages available, sleep briefly to avoid busy waiting
-                    std::this_thread::sleep_for(std::chrono::microseconds(100)); // Much shorter sleep
+                    // Increase sleep time to reduce CPU usage and potential race conditions
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1)); // Changed from microseconds(10)
                 }
             } else {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
         }
     }
@@ -435,117 +440,140 @@ public:
 
     void processOSCMessage(const std::string& address, const std::vector<float>& floats,
                            const std::vector<int>& integers, const std::vector<std::string>& strings) {
-        // Only process /composition messages
-        if (address.find("/composition") != 0) return;
+        try {
+            // Only process /composition messages
+            if (address.find("/composition") != 0) return;
 
-        if(!floats.empty()) return; // Ignore float messages for now
+            if(!floats.empty()) return; // Ignore float messages for now
 
-        // Split the address into components
-        std::vector<std::string> pathParts = splitOSCPath(address);
-        
-        // Remove "composition" from the beginning
-        if (pathParts.empty() || pathParts[0] != "composition") return;
-        pathParts.erase(pathParts.begin());
+            // Split the address into components
+            std::vector<std::string> pathParts = splitOSCPath(address);
+            
+            // Add validation
+            if (pathParts.empty()) return;
+            
+            // Remove "composition" from the beginning
+            if (pathParts[0] != "composition") return;
+            pathParts.erase(pathParts.begin());
 
-        if (pathParts.empty()) return;
+            if (pathParts.empty()) return;
 
-        // --- 1. Handle deck selection and deck change ---
-        if (pathParts[0] == "decks" && pathParts.size() >= 3) {
-            int deckId = std::stoi(pathParts[1]);
+            // --- 1. Handle deck selection and deck change ---
+            if (pathParts[0] == "decks" && pathParts.size() >= 3) {
+                int deckId = std::stoi(pathParts[1]);
 
-            debugOSC(pathParts, floats, integers, strings);
+                //debugOSC(pathParts, floats, integers, strings);
 
-            if (pathParts[2] == "select" && integers.empty()) { // && integers[0] == 1 apparently select is sent with no payload
-                if (deckId != currentDeckId) {
-                    std::cout << "Deck changed to: " << deckId << std::endl;
-                    clear();
-                    currentDeckId = deckId;
-                }
-            }
-            return;
-        }
-
-        // Check for select/connect messages
-        std::string endpoint = pathParts.back();
-        bool isSelect = (endpoint == "select");
-        bool isConnect = (endpoint == "connect");
-
-        if ((isSelect || isConnect) && !integers.empty() && integers[0] == 1) {
-            std::cout << "Select/Connect Message: " << address << std::endl;
-
-            if (pathParts[0] == "columns" && pathParts.size() >= 2) {
-                int columnId = std::stoi(pathParts[1]);
-                if (isSelect) {
-                    selectedColumnId = columnId;
-                } else if (isConnect) {
-                    connectedColumnId = columnId;
-                    ensureConnectedClipIndices();
-                    for (size_t i = 0; i < layers.size(); ++i) {
-                        connectedClipIndices[i] = columnId;
+                if (pathParts[2] == "select" && integers.empty()) { // && integers[0] == 1 apparently select is sent with no payload
+                    if (deckId != currentDeckId) {
+                        //std::cout << "Deck changed to: " << deckId << std::endl;
+                        clear();
+                        currentDeckId = deckId;
                     }
                 }
                 return;
             }
 
-            if (pathParts[0] == "layers" && pathParts.size() >= 2) {
-                int layerId = std::stoi(pathParts[1]);
-                if (pathParts.size() == 3 && isSelect) {
-                    // /layers/X/select
-                    selectedLayerId = layerId;
-                    return;
-                }
-                if (pathParts.size() >= 4 && pathParts[2] == "clips") {
-                    // /layers/X/clips/Y/select or /connect
-                    int clipId = std::stoi(pathParts[3]);
+            // Check for select/connect messages
+            std::string endpoint = pathParts.back();
+            bool isSelect = (endpoint == "select");
+            bool isConnect = (endpoint == "connect");
+
+            if ((isSelect || isConnect) && !integers.empty() && integers[0] == 1) {
+                //std::cout << "Select/Connect Message: " << address << std::endl;
+
+                if (pathParts[0] == "columns" && pathParts.size() >= 2) {
+                    int columnId = std::stoi(pathParts[1]);
                     if (isSelect) {
-                        selectedClipLayerId = layerId;
-                        selectedClipId = clipId;
+                        selectedColumnId = columnId;
                     } else if (isConnect) {
+                        connectedColumnId = columnId;
                         ensureConnectedClipIndices();
-                        if (layerId >= 1 && layerId <= static_cast<int>(connectedClipIndices.size())) {
-                            connectedClipIndices[layerId - 1] = clipId;
+                        for (size_t i = 0; i < layers.size(); ++i) {
+                            connectedClipIndices[i] = columnId;
                         }
                     }
                     return;
                 }
+
+                if (pathParts[0] == "layers" && pathParts.size() >= 2) {
+                    int layerId = std::stoi(pathParts[1]);
+                    if (pathParts.size() == 3 && isSelect) {
+                        // /layers/X/select
+                        selectedLayerId = layerId;
+                        return;
+                    }
+                    if (pathParts.size() >= 4 && pathParts[2] == "clips") {
+                        // check if pathParts[3] starts with a digit. If it doesn't its probably transitiontarget, so ignore it.
+                        if (pathParts[3].empty() || !std::isdigit(pathParts[3][0])) return;
+
+                        // /layers/X/clips/Y/select or /connect
+                        int clipId = std::stoi(pathParts[3]);
+                        if (isSelect) {
+                            selectedClipLayerId = layerId;
+                            selectedClipId = clipId;
+                        } else if (isConnect) {
+                            ensureConnectedClipIndices();
+                            if (layerId >= 1 && layerId <= static_cast<int>(connectedClipIndices.size())) {
+                                connectedClipIndices[layerId - 1] = clipId;
+                            }
+                        }
+                        return;
+                    }
+                }
             }
-        }
 
-        // Skip certain endpoints
-        if (endpoint == "selected" || endpoint == "connected") {
-            return;
-        }
-
-        // --- 3. Trickledown: pass to appropriate layer/clip/effect ---
-        if (pathParts[0] == "layers" && pathParts.size() >= 2) {
-            int layerId = std::stoi(pathParts[1]);
-            auto layer = getOrCreateLayer(layerId); // Use getOrCreateLayer instead of getLayer
-            if (layer) {
-                // Remove "layers" and layer number from path
-                std::vector<std::string> remainingPath(pathParts.begin() + 2, pathParts.end());
-                layer->processOSCMessage(remainingPath, floats, integers, strings);
+            // Skip certain endpoints
+            if (endpoint == "selected" || endpoint == "connected") {
+                return;
             }
-            return;
-        }
 
-        // Ignore other top-level paths
-        if (pathParts[0] == "columns" || pathParts[0] == "decks" || 
-            pathParts[0] == "selectedlayer" || pathParts[0] == "selectedclip" || 
-            pathParts[0] == "selectedcolumn") {
-            return;
+            // --- 3. Trickledown: pass to appropriate layer/clip/effect ---
+            if (pathParts[0] == "layers" && pathParts.size() >= 2) {
+                int layerId = std::stoi(pathParts[1]);
+                auto layer = getOrCreateLayer(layerId); // Use getOrCreateLayer instead of getLayer
+                if (layer) {
+                    // Remove "layers" and layer number from path
+                    std::vector<std::string> remainingPath(pathParts.begin() + 2, pathParts.end());
+                    layer->processOSCMessage(remainingPath, floats, integers, strings);
+                }
+                return;
+            }
+
+            // Ignore other top-level paths
+            if (pathParts[0] == "columns" || pathParts[0] == "decks" || 
+                pathParts[0] == "selectedlayer" || pathParts[0] == "selectedclip" || 
+                pathParts[0] == "selectedcolumn") {
+                return;
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "Error processing OSC message '" << address << "': " << e.what() << std::endl;
+        } catch (...) {
+            std::cerr << "Unknown error processing OSC message: " << address << std::endl;
         }
     }
     
     std::shared_ptr<Layer> getOrCreateLayer(int layerId) {
         if (layerId < 1) return nullptr;
         
+        // Add safety check for maximum reasonable layer count
+        if (layerId > 100) { // Reasonable upper limit
+            std::cerr << "Warning: Layer ID " << layerId << " exceeds reasonable limit" << std::endl;
+            return nullptr;
+        }
+        
         // Dynamically grow the layers vector as needed
         if (layerId > static_cast<int>(layers.size())) {
-            layers.resize(layerId);
-            for (int i = 0; i < layerId; ++i) {
-                if (!layers[i]) layers[i] = std::make_shared<Layer>(i + 1);
+            try {
+                layers.resize(layerId);
+                for (int i = 0; i < layerId; ++i) {
+                    if (!layers[i]) layers[i] = std::make_shared<Layer>(i + 1);
+                }
+                ensureConnectedClipIndices();
+            } catch (const std::exception& e) {
+                std::cerr << "Error resizing layers vector: " << e.what() << std::endl;
+                return nullptr;
             }
-            ensureConnectedClipIndices(); // Update connected clip indices when layers change
         }
         return layers[layerId - 1];
     }
@@ -643,6 +671,11 @@ public:
         selectedClipId = 0;
         lastSelectionType = LastSelectionType::NONE;
         //deckProperties.clear();
+
+        //clear the queue of messages
+        if (oscListener) {
+            oscListener->clearMessageQueue();
+        }
         
         layers.clear();
         
@@ -654,25 +687,11 @@ public:
     
     // Additional convenience methods for PushUI integration
     bool doesClipExist(int column, int layer) {
-        if (true) { // !oscListener) {
-            // Fallback to old method if no OSC listener available
-            auto layerObj = getLayer(layer);
-            if (!layerObj) return false;
-            auto clipObj = layerObj->getClip(column);
-            return clipObj && !clipObj->properties.empty();
-        }
-
-        //std::cout << "Querying clip existence: Layer " << layer << ", Column " << column << std::endl;
-        
-        try {
-            std::string address = "/composition/layers/" + std::to_string(layer) + "/clips/" + std::to_string(column) + "/name";
-            std::string clipName = oscListener->QueryString(address, 15); // 15 ms timeout
-            return !clipName.empty();
-        } catch (const std::exception& ex) {
-            // Query failed or timed out, assume clip doesn't exist
-            //std::cout << "Error querying: " << ex.what() << std::endl;
-            return false;
-        }
+        // Fallback to old method if no OSC listener available
+        auto layerObj = getLayer(layer);
+        if (!layerObj) return false;
+        auto clipObj = layerObj->getClip(column);
+        return clipObj && clipObj->exists();
     }
     
     bool isColumnConnected(int column) {
