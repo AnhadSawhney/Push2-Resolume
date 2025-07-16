@@ -157,6 +157,28 @@ void PushUI::handleNavigationButtons(int controller, int value) {
     } else if (controller == BTN_PAGE_LEFT && columnOffset > 0) {
         columnOffset--;
     }
+
+    int d = resolumeTracker.getCurrentDeck();
+    std::string address;
+
+    switch (controller) {
+        case 49:
+            resolumeTracker.clear();
+            // send the osc message to change the deck
+            address = "/composition/decks/" + std::to_string(d-1) + "/select";
+            if (oscSender) {
+                oscSender->sendMessage(address, 1);
+            }
+            break;
+        case 48:
+            resolumeTracker.clear();
+            // send the osc message to change the deck
+            address = "/composition/decks/" + std::to_string(d+1) + "/select";
+            if (oscSender) {
+                oscSender->sendMessage(address, 1);
+            }
+            break;
+    }
 }
 
 /*

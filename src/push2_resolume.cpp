@@ -51,7 +51,7 @@ int main(int argc, char* argv[]) {
             liveTreeMode = true;
         }
     }
-    liveTreeMode = false;
+    //liveTreeMode = true;
 
     try {
         // Create Resolume tracker
@@ -97,8 +97,10 @@ int main(int argc, char* argv[]) {
 
         // Create OSC listener
         ResolumeOSCListener listener(oscSenderForListener);
-        resolumeTracker.setOSCListener(&listener);
         
+        // Create Resolume tracker with listener
+        resolumeTracker.setOSCListener(&listener);
+
         // Create UDP socket for receiving OSC messages
         UdpListeningReceiveSocket socket(IpEndpointName(IpEndpointName::ANY_ADDRESS, incomingOscPort), &listener);
 
@@ -119,7 +121,7 @@ int main(int argc, char* argv[]) {
         
         // Main update loop
         std::thread updateThread([&pushUI, &shouldStop]() {
-            constexpr int frameTimeMs = 1000 / 24; // ~41.67ms per frame for 24fps
+            constexpr int frameTimeMs = 1000 / 10; // ~100ms per frame for 10fps
             while (!shouldStop.load()) {
                 auto start = std::chrono::steady_clock::now();
                 if (pushUI) {
@@ -131,8 +133,6 @@ int main(int argc, char* argv[]) {
                 int sleepMs = frameTimeMs - static_cast<int>(elapsed);
                 if (sleepMs > 0) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs));
-                } else {
-                    std::cout << "[Warning] Update loop is taking longer than frame time (" << elapsed << "ms)" << std::endl;
                 }
             }
         });
@@ -143,7 +143,7 @@ int main(int argc, char* argv[]) {
                 // Clear screen (Windows)
                 std::system("cls");
                 resolumeTracker.print();
-                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
             return 0;
         }

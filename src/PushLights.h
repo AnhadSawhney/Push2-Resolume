@@ -301,5 +301,9 @@ public:
 
         // Master button (cc28) always white
         setButtonColorBW(28, 128);
+
+        //set shift and select buttons to white
+        setButtonColorBW(49, 128);
+        setButtonColorBW(48, 128);
     }
 };

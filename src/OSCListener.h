@@ -10,6 +10,7 @@
 #include <map>
 #include <functional>
 #include <chrono>
+#include <queue>
 
 #include "OSCSender.h"
 
@@ -19,8 +20,9 @@ class OSCSender;
 
 using namespace osc;
 
-struct QueryResult {
+struct OSCListenerMessage {
     bool hasValue = false;
+    std::string address;
     std::vector<float> floats;
     std::vector<int> integers;
     std::vector<std::string> strings;
@@ -34,7 +36,12 @@ private:
     // Query mechanism
     std::mutex queryMutex;
     std::condition_variable queryCondition;
-    std::map<std::string, QueryResult> pendingQueries;
+    std::map<std::string, OSCListenerMessage> pendingQueries;
+    
+    // Message queue
+    std::queue<OSCListenerMessage> messageQueue;
+    std::mutex queueMutex;
+    std::condition_variable queueCondition;
     
 public:
     ResolumeOSCListener(OSCSender* sender = nullptr) 
@@ -47,7 +54,7 @@ public:
     }
     
     // Blocking query function
-    QueryResult query(const std::string& address, int timeoutMs = 50) {
+    OSCListenerMessage query(const std::string& address, int timeoutMs = 50) {
         if (!oscSender) {
             throw std::runtime_error("OSCSender not set");
         }
@@ -57,7 +64,7 @@ public:
         std::unique_lock<std::mutex> lock(queryMutex);
         
         // Clear any existing result for this address
-        pendingQueries[address] = QueryResult{};
+        pendingQueries[address] = OSCListenerMessage{};
         
         // Send query
         oscSender->sendMessage(address, std::string("?"));
@@ -73,14 +80,14 @@ public:
             throw std::runtime_error("Query timeout for address: " + address);
         }
         
-        QueryResult result = pendingQueries[address];
+        OSCListenerMessage result = pendingQueries[address];
         pendingQueries.erase(address);
         return result;
     }
     
     // Convenience wrappers for specific types
     int QueryInt(const std::string& address, int timeoutMs = 50) {
-        QueryResult result = query(address, timeoutMs);
+        OSCListenerMessage result = query(address, timeoutMs);
         //if (result.integers.empty()) {
         //    throw std::runtime_error("No integer value received for address: " + address);
         //}
@@ -88,7 +95,7 @@ public:
     }
     
     float QueryFloat(const std::string& address, int timeoutMs = 50) {
-        QueryResult result = query(address, timeoutMs);
+        OSCListenerMessage result = query(address, timeoutMs);
         //if (result.floats.empty()) {
         //    throw std::runtime_error("No float value received for address: " + address);
         //}
@@ -96,7 +103,7 @@ public:
     }
     
     std::string QueryString(const std::string& address, int timeoutMs = 50) {
-        QueryResult result = query(address, timeoutMs);
+        OSCListenerMessage result = query(address, timeoutMs);
         //if (result.strings.empty()) {
         //    throw std::runtime_error("No string value received for address: " + address);
         //}
@@ -106,6 +113,28 @@ public:
         return result.strings[0];
     }
     
+    // Method to get queued messages (non-blocking)
+    std::vector<OSCListenerMessage> getQueuedMessages() {
+        std::lock_guard<std::mutex> lock(queueMutex);
+        std::vector<OSCListenerMessage> messages;
+        while (!messageQueue.empty()) {
+            messages.push_back(messageQueue.front());
+            messageQueue.pop();
+        }
+        return messages;
+    }
+    
+    // Replace the waitForMessages method with this simpler approach:
+    std::optional<OSCListenerMessage> getNextMessage() {
+        std::lock_guard<std::mutex> lock(queueMutex);
+        if (messageQueue.empty()) {
+            return std::nullopt;
+        }
+        OSCListenerMessage message = messageQueue.front();
+        messageQueue.pop();
+        return message;
+    }
+
 protected:
     virtual void ProcessMessage(const ReceivedMessage& m, const IpEndpointName& remoteEndpoint) override {
         try {
@@ -133,16 +162,20 @@ protected:
                 auto it = pendingQueries.find(address);
                 if (it != pendingQueries.end() && !it->second.hasValue) {
                     it->second.hasValue = true;
+                    it->second.address = address;
                     it->second.floats = floats;
                     it->second.integers = integers;
                     it->second.strings = strings;
                     queryCondition.notify_all();
+                    return; // Don't queue query responses
                 }
             }
             
-            // Send to callback if set
-            if (messageCallback) {
-                messageCallback(address, floats, integers, strings);
+            // Queue the message for processing
+            {
+                std::lock_guard<std::mutex> lock(queueMutex);
+                messageQueue.push({true, address, floats, integers, strings});
+                queueCondition.notify_one();
             }
             
             // Debug output

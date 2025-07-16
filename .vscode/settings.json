@@ -71,6 +71,17 @@
         "regex": "cpp",
         "unordered_map": "cpp",
         "variant": "cpp",
-        "xhash": "cpp"
+        "xhash": "cpp",
+        "any": "cpp",
+        "codecvt": "cpp",
+        "condition_variable": "cpp",
+        "csignal": "cpp",
+        "numeric": "cpp",
+        "random": "cpp",
+        "ranges": "cpp",
+        "set": "cpp",
+        "span": "cpp",
+        "unordered_set": "cpp",
+        "valarray": "cpp"
     }
 }

@@ -11,10 +11,49 @@
 #include <variant>
 #include <sstream>
 #include <functional>
+#include <thread>
+#include <atomic>
 #include "PropertyDictionary.h"
 
 // Include the ResolumeOSCListener header to provide the full type definition
 #include "OSCListener.h"
+
+// Helper function to debug OSC
+inline void debugOSC(const std::vector<std::string>& pathParts, const std::vector<float>& floats, 
+                          const std::vector<int>& integers, const std::vector<std::string>& strings) {
+    std::cout << "OSC Path: ";
+    for (size_t i = 0; i < pathParts.size(); ++i) {
+        if (i > 0) std::cout << "/";
+        std::cout << pathParts[i];
+    }
+
+    if(!floats.empty()) {
+        std::cout << " | Floats: [";
+        for (size_t i = 0; i < floats.size(); ++i) {
+            if (i > 0) std::cout << ", ";
+            std::cout << floats[i];
+        }
+        std::cout << "]";
+    }
+    if(!integers.empty()) {
+        std::cout << " | Ints: [";
+        for (size_t i = 0; i < integers.size(); ++i) {
+            if (i > 0) std::cout << ", ";
+            std::cout << integers[i];
+        }
+        std::cout << "]";
+    }
+    if(!strings.empty()) {
+        std::cout << " | Strings: [";
+        for (size_t i = 0; i < strings.size(); ++i) {
+            if (i > 0) std::cout << ", ";
+            std::cout << strings[i];
+        }
+        std::cout << "]";
+    }
+
+    std::cout << std::endl;
+}
 
 // Helper function to split OSC address into path components
 inline std::vector<std::string> splitOSCPath(const std::string& address) {
@@ -314,9 +353,6 @@ private:
         CLIP
     };
     LastSelectionType lastSelectionType;
-    
-    // Removed: deckChangedCallback and related members
-    // Removed: prevLayerCount, prevColumnCount, checkAndTriggerDeckChanged
 
     // Helper to ensure connectedClipIndices matches layer count
     void ensureConnectedClipIndices() {
@@ -326,6 +362,26 @@ private:
 
     // Add reference to OSC listener for queries
     ResolumeOSCListener* oscListener = nullptr;
+    
+    // Message processing thread
+    std::thread processingThread;
+    std::atomic<bool> shouldStopProcessing{false};
+    
+    void messageProcessingLoop() {
+        while (!shouldStopProcessing.load()) {
+            if (oscListener) {
+                auto message = oscListener->getNextMessage();
+                if (message.has_value()) {
+                    processOSCMessage(message->address, message->floats, message->integers, message->strings);
+                } else {
+                    // No messages available, sleep briefly to avoid busy waiting
+                    std::this_thread::sleep_for(std::chrono::microseconds(100)); // Much shorter sleep
+                }
+            } else {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+        }
+    }
 
 public:
     ResolumeTracker(ResolumeOSCListener* listener = nullptr) : currentDeckId(0), deckInitialized(false),
@@ -337,21 +393,25 @@ public:
         
         // Set up the callback if OSCListener is provided
         if (oscListener) {
-            oscListener->setMessageCallback([this](const std::string& address, const std::vector<float>& floats, 
-                                                   const std::vector<int>& integers, const std::vector<std::string>& strings) {
-                this->processOSCMessage(address, floats, integers, strings);
-            });
+            // Remove the direct callback since we're using the queue now
+        }
+        
+        // Start the message processing thread
+        shouldStopProcessing.store(false);
+        processingThread = std::thread(&ResolumeTracker::messageProcessingLoop, this);
+    }
+    
+    ~ResolumeTracker() {
+        // Stop the processing thread
+        shouldStopProcessing.store(true);
+        if (processingThread.joinable()) {
+            processingThread.join();
         }
     }
     
     void setOSCListener(ResolumeOSCListener* listener) {
         oscListener = listener;
-        if (oscListener) {
-            oscListener->setMessageCallback([this](const std::string& address, const std::vector<float>& floats, 
-                                                   const std::vector<int>& integers, const std::vector<std::string>& strings) {
-                this->processOSCMessage(address, floats, integers, strings);
-            });
-        }
+        // No need to set callback anymore since we're using the queue
     }
     
     // Returns the number of layers
@@ -378,6 +438,8 @@ public:
         // Only process /composition messages
         if (address.find("/composition") != 0) return;
 
+        if(!floats.empty()) return; // Ignore float messages for now
+
         // Split the address into components
         std::vector<std::string> pathParts = splitOSCPath(address);
         
@@ -390,8 +452,12 @@ public:
         // --- 1. Handle deck selection and deck change ---
         if (pathParts[0] == "decks" && pathParts.size() >= 3) {
             int deckId = std::stoi(pathParts[1]);
-            if (pathParts[2] == "select" && !integers.empty() && integers[0] == 1) {
+
+            debugOSC(pathParts, floats, integers, strings);
+
+            if (pathParts[2] == "select" && integers.empty()) { // && integers[0] == 1 apparently select is sent with no payload
                 if (deckId != currentDeckId) {
+                    std::cout << "Deck changed to: " << deckId << std::endl;
                     clear();
                     currentDeckId = deckId;
                 }
@@ -497,6 +563,10 @@ public:
         }
         return nullptr;
     }
+
+    int getCurrentDeck() const {
+        return currentDeckId;
+    }
     
     // Convenience getters for commonly used values
     //bool isTempoControllerPlaying() const { 
@@ -574,20 +644,22 @@ public:
         lastSelectionType = LastSelectionType::NONE;
         //deckProperties.clear();
         
-        for (auto& layer : layers) {
-            layer->clear();
-        }
+        layers.clear();
+        
+        //for (auto& layer : layers) {
+        //    layer->clear();
+        //}
         // Removed: prevLayerCount and prevColumnCount reset
     }
     
     // Additional convenience methods for PushUI integration
     bool doesClipExist(int column, int layer) {
-        if (!oscListener) {
+        if (true) { // !oscListener) {
             // Fallback to old method if no OSC listener available
             auto layerObj = getLayer(layer);
             if (!layerObj) return false;
             auto clipObj = layerObj->getClip(column);
-            return clipObj && !clipObj->name.empty();
+            return clipObj && !clipObj->properties.empty();
         }
 
         //std::cout << "Querying clip existence: Layer " << layer << ", Column " << column << std::endl;
