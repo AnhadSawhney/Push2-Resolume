@@ -3,8 +3,8 @@
 #include "PushDisplay.h"
 #include <iostream>
 
-PushUI::PushUI(PushUSB& push, ResolumeTracker& tracker, std::unique_ptr<OSCSender> osc)
-    : pushDevice(push), resolumeTracker(tracker), oscSender(std::move(osc)),
+PushUI::PushUI(PushUSB& push, ResolumeTracker& tracker, std::shared_ptr<OSCSender> osc)
+    : pushDevice(push), resolumeTracker(tracker), oscSender(osc), // Changed to shared_ptr
       columnOffset(0), layerOffset(0),
       lastKnownDeck(-1), trackingInitialized(false),
       numLayers(0), numColumns(0), mode(Mode::Triggering) // <-- add members for layer/column count

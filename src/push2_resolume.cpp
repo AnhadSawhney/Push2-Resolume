@@ -20,9 +20,9 @@
 // ------------------------
 int main(int argc, char* argv[]) {
     // Defaults
-    int incomingOscPort = 7000; // Default incoming OSC port (listen)
-    std::string resolumeIp = "127.0.0.1"; // Default Resolume IP
-    int resolumeOscPort = 6669; // Default outgoing OSC port (to Resolume)
+    int incomingOscPort = 7000;
+    std::string resolumeIp = "127.0.0.1";
+    int resolumeOscPort = 6669;
 
     // Simple command line parsing
     for (int i = 1; i < argc; ++i) {
@@ -35,8 +35,8 @@ int main(int argc, char* argv[]) {
             resolumeIp = argv[++i];
         } else if (arg == "--help" || arg == "-h") {
             std::cout << "Usage: " << argv[0] << " [--in-port <port>] [--out-port <port>] [--ip <address>]" << std::endl;
-            std::cout << "  --in-port,  -i   Incoming OSC port to listen on (default: 6669)" << std::endl;
-            std::cout << "  --out-port, -o   Outgoing OSC port to Resolume (default: 7000)" << std::endl;
+            std::cout << "  --in-port,  -i   Incoming OSC port to listen on (default: 7000)" << std::endl;
+            std::cout << "  --out-port, -o   Outgoing OSC port to Resolume (default: 6669)" << std::endl;
             std::cout << "  --ip,       -a   Resolume IP address (default: 127.0.0.1)" << std::endl;
             std::cout << "  --help,     -h   Show this help message" << std::endl;
             return 0;
@@ -54,10 +54,16 @@ int main(int argc, char* argv[]) {
     //liveTreeMode = true;
 
     try {
-        // Create Resolume tracker
-        ResolumeTracker resolumeTracker;
+        // 1. Create OSC sender first (shared resource)
+        auto oscSender = std::make_shared<OSCSender>(resolumeIp, resolumeOscPort);
+        
+        // 2. Create OSC listener with the sender
+        ResolumeOSCListener listener(oscSender.get());
+        
+        // 3. Create Resolume tracker with the listener
+        ResolumeTracker resolumeTracker(&listener);
 
-        // Initialize Push 2 connection
+        // 4. Initialize Push 2 connection
         PushUSB push;
         if (!push.initialize()) {
             std::cerr << "Failed to initialize Push 2 MIDI" << std::endl;
@@ -71,15 +77,10 @@ int main(int argc, char* argv[]) {
             std::cout << "Push 2 not connected - continuing without Push 2" << std::endl;
         }
 
-        // Create OSC sender for sending commands to Resolume
-        std::unique_ptr<OSCSender> oscSender = std::make_unique<OSCSender>(resolumeIp, resolumeOscPort);
-
-        // Create PushUI (only if Push is connected)
+        // 5. Create PushUI (only if Push is connected)
         std::unique_ptr<PushUI> pushUI;
-        OSCSender* oscSenderForListener = oscSender.get();
         if (pushConnected) {
-            pushUI = std::make_unique<PushUI>(push, resolumeTracker, std::move(oscSender));
-            oscSenderForListener = pushUI->getOSCSender(); // You must implement getOSCSender() in PushUI to return the OSCSender pointer
+            pushUI = std::make_unique<PushUI>(push, resolumeTracker, oscSender);
 
             // Set up MIDI callback to handle Push 2 input
             push.setMidiCallback([&pushUI](const PushMidiMessage& msg) {
@@ -95,13 +96,7 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Create OSC listener
-        ResolumeOSCListener listener(oscSenderForListener);
-        
-        // Create Resolume tracker with listener
-        resolumeTracker.setOSCListener(&listener);
-
-        // Create UDP socket for receiving OSC messages
+        // 6. Create UDP socket for receiving OSC messages
         UdpListeningReceiveSocket socket(IpEndpointName(IpEndpointName::ANY_ADDRESS, incomingOscPort), &listener);
 
         std::cout << "Push2-Resolume Controller starting..." << std::endl;

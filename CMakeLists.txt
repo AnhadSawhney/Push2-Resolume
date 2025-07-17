@@ -25,6 +25,19 @@ foreach(f ${OTHER_SOURCES})
 endforeach()
 add_executable(push2_resolume ${SOURCES})
 
+# Add pre-build step to kill executable if running
+if(WIN32)
+    add_custom_command(TARGET push2_resolume PRE_BUILD
+        COMMAND taskkill /F /IM push2_resolume.exe /T 2>nul || echo Process not running
+        COMMENT "Stopping running executable"
+    )
+else()
+    add_custom_command(TARGET push2_resolume PRE_BUILD
+        COMMAND bash -c "pkill -f push2_resolume 2>/dev/null || true"
+        COMMENT "Stopping running executable"
+    )
+endif()
+
 
 # Add RtMidi as a static library
 add_library(rtmidi_static STATIC 

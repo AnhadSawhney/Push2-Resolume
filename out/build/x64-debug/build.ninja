@@ -79,7 +79,7 @@ build push2_resolume.exe: CXX_EXECUTABLE_LINKER__push2_resolume_Debug CMakeFiles
   LINK_LIBRARIES = C:\Users\Anhad\Documents-Unsynced\Push2-Resolume\lib\libusb-1.0.lib  rtmidi_static.lib  winmm.lib  oscpack.lib  Ws2_32.lib  winmm.lib  Ws2_32.lib  kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib
   OBJECT_DIR = CMakeFiles\push2_resolume.dir
   POST_BUILD = cd .
-  PRE_LINK = cd .
+  PRE_LINK = C:\WINDOWS\system32\cmd.exe /C "cd /D C:\Users\Anhad\Documents-Unsynced\Push2-Resolume\out\build\x64-debug && ( taskkill /F /IM push2_resolume.exe /T 2>nul || echo Process not running ) && cd C:\Users\Anhad\Documents-Unsynced\Push2-Resolume\out\build\x64-debug"
   TARGET_COMPILE_PDB = CMakeFiles\push2_resolume.dir\
   TARGET_FILE = push2_resolume.exe
   TARGET_IMPLIB = push2_resolume.lib

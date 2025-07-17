@@ -82,6 +82,8 @@
         "set": "cpp",
         "span": "cpp",
         "unordered_set": "cpp",
-        "valarray": "cpp"
+        "valarray": "cpp",
+        "deque": "cpp",
+        "queue": "cpp"
     }
 }

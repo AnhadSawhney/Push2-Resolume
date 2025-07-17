@@ -31,7 +31,7 @@ class PushUI {
 private:
     PushUSB& pushDevice;
     ResolumeTracker& resolumeTracker;
-    std::unique_ptr<OSCSender> oscSender;
+    std::shared_ptr<OSCSender> oscSender; // Changed from unique_ptr
     PushLights* lights;
     PushDisplay* display;
     int columnOffset;
@@ -58,7 +58,7 @@ private:
     Mode mode = Mode::Triggering;
 
 public:
-    PushUI(PushUSB& push, ResolumeTracker& tracker, std::unique_ptr<OSCSender> osc = nullptr);
+    PushUI(PushUSB& push, ResolumeTracker& tracker, std::shared_ptr<OSCSender> osc = nullptr);
     ~PushUI();
     bool initialize();
     int getColumnOffset() const;
@@ -69,7 +69,7 @@ public:
     void update();
     void onMidiMessage(const PushMidiMessage& msg);
     void forceRefresh();
-    OSCSender* getOSCSender() { return oscSender.get(); }
+    OSCSender* getOSCSender() const { return oscSender.get(); }
 
     // Mode accessors
     Mode getMode() const { return mode; }

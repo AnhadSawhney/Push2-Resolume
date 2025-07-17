@@ -216,8 +216,13 @@ public:
     PropertyDictionary properties;
     std::vector<std::shared_ptr<Effect>> effects;
     std::vector<std::shared_ptr<Clip>> clips;
+    int mostRecentPlayingClipId; // Track most recently playing clip in this layer
 
-    Layer(int layerId) : id(layerId) {
+    Layer(int layerId) : id(layerId), mostRecentPlayingClipId(-1) {
+    }
+
+    int getPlayingId() const {
+        return 0; //mostRecentPlayingClipId;
     }
 
     std::shared_ptr<Clip> getOrCreateClip(int clipId) {
