@@ -14,16 +14,16 @@ public:
     std::map<std::string, PropertyValue> properties;
     
     // Print method for trickle-down printing
-    void print(const std::string& indent) const {
-        //return;
-        
+    void print(const std::string& indent) const {        
         if (properties.empty()) return;
         
+        #ifdef PRINT_DETAILED_PROPERTIES
         for (const auto& pair : properties) {
             std::cout << indent << pair.first << " = "
                       << getPropertyAsString(pair.first)
                       << " (" << getPropertyType(pair.first) << ")" << std::endl;
         }
+        #endif
        return;
     }
     

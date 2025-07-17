@@ -199,9 +199,8 @@ public:
     
     // Print method for trickle-down printing
     void print(const std::string& indent) const {
-        std::cout << indent << "Clip " << id << ": <" << name << ">" << (exists() ? " exists" : "") << std::endl;
-
-        if (!properties.properties.empty()) {
+        if (!properties.empty()) {
+            std::cout << indent << "Clip " << id << ": <" << name << ">" << (exists() ? " exists" : "") << std::endl;
             std::cout << indent << "  Properties:" << std::endl;
             properties.print(indent + "    ");
         }
@@ -220,14 +219,14 @@ public:
     PropertyDictionary properties;
     std::vector<std::shared_ptr<Effect>> effects;
     std::vector<std::shared_ptr<Clip>> clips;
-    int mostRecentPlayingClipId; // Track most recently playing clip in this layer
+    //int mostRecentPlayingClipId; // Track most recently playing clip in this layer
 
-    Layer(int layerId) : id(layerId), mostRecentPlayingClipId(-1) {
+    Layer(int layerId) : id(layerId) {
     }
 
-    int getPlayingId() const {
-        return mostRecentPlayingClipId;
-    }
+    //int getPlayingId() const {
+    //    return mostRecentPlayingClipId;
+    //}
 
     std::shared_ptr<Clip> getOrCreateClip(int clipId) {
         if (clipId < 1) return nullptr;
@@ -265,7 +264,7 @@ public:
     void processOSCMessage(const std::vector<std::string>& pathParts, const std::vector<float>& floats, 
                           const std::vector<int>& integers, const std::vector<std::string>& strings) {
         try {
-                                if (pathParts.empty()) {
+            if (pathParts.empty()) {
                 // Direct layer property
                 properties.setFromOSCData("", floats, integers, strings);
                 return;
@@ -286,11 +285,11 @@ public:
                     clip->processOSCMessage(remainingPath, floats, integers, strings);
 
                     // if it is a transport/position with nonzero float payload, this is the most recently playing clip
-                    if (remainingPath.size() >= 2 && remainingPath[0] == "transport" && remainingPath[1] == "position") {
-                        if (!floats.empty() && floats[0] > 0) {
-                            mostRecentPlayingClipId = clipId;
-                        }
-                    }
+                    //if (remainingPath.size() >= 2 && remainingPath[0] == "transport" && remainingPath[1] == "position") {
+                    //    if (!floats.empty() && floats[0] > 0) {
+                    //        mostRecentPlayingClipId = clipId;
+                    //    }
+                    //}
                 }
 
                 return;
@@ -329,7 +328,7 @@ public:
     
     // Print method for trickle-down printing
     void print(const std::string& indent) const {
-        std::cout << indent << "Layer " << id << ":" << std::endl;
+        std::cout << indent << "Layer: " << std::endl;
 
         if (!properties.properties.empty()) {
             std::cout << indent << "  Properties:" << std::endl;
@@ -728,13 +727,13 @@ public:
     bool isClipPlaying(int column, int layer) {
         auto layerObj = getLayer(layer);
         if (!layerObj) return false;
-        return layerObj->getPlayingId() == column;
+        //return layerObj->getPlayingId() == column;
         
-        //auto clipObj = layerObj->getClip(column);
-        //if(clipObj) { // need to use this because getClip is not guaranteed to return a valid clip
-        //    return clipObj->playing();
-        //}
-        //return false;
+        auto clipObj = layerObj->getClip(column);
+        if(clipObj) { // need to use this because getClip is not guaranteed to return a valid clip
+            return clipObj->playing();
+        }
+        return false;
     }
     
     bool doesLayerExist(int layer) {
