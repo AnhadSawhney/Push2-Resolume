@@ -181,7 +181,7 @@ int main(int argc, char* argv[]) {
                 for (int layer = 1; layer <= 8; ++layer) {
                     for (int col = 1; col <= 8; ++col) {
                         if (resolumeTracker.doesClipExist(col, layer)) {
-                            if (resolumeTracker.isClipConnected(col, layer)) {
+                            if (resolumeTracker.isClipPlaying(col, layer)) {
                                 std::cout << "O "; // O for playing clip
                             } else {
                                 std::cout << "X "; // X for existing clip

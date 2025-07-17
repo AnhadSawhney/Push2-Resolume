@@ -147,11 +147,16 @@ public:
         auto timeSinceUpdate = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastTransportUpdate);
 
         // If no transport update in the last 50ms, consider it stopped
-        if (timeSinceUpdate.count() > 50) {
-            return false;
-        }
+        return timeSinceUpdate.count() < 100 && properties.getFloat("transport/position") > 0;
         
-        return properties.getFloat("transport/position") > 0;
+        //return properties.getFloat("transport/position") > 0;
+    }
+
+    // Force expire the timeout by setting lastTransportUpdate to a very old time
+    void forceExpire() {
+        //lastTransportUpdate = std::chrono::steady_clock::now() - std::chrono::milliseconds(1000);
+        // set transport position to 0
+        properties.setFloat("transport/position", 0.0f);
     }
 
     std::shared_ptr<Effect> getOrCreateEffect(const std::string& effectName) {
@@ -302,13 +307,6 @@ public:
                     // Remove "clips" and clip number from path
                     std::vector<std::string> remainingPath(parts.begin() + 2, parts.end());
                     clip->processOSCMessage(remainingPath, floats, integers, strings);
-
-                    // if it is a transport/position with nonzero float payload, this is the most recently playing clip
-                    //if (remainingPath.size() >= 2 && remainingPath[0] == "transport" && remainingPath[1] == "position") {
-                    //    if (!floats.empty() && floats[0] > 0) {
-                    //        mostRecentPlayingClipId = clipId;
-                    //    }
-                    //}
                 }
 
                 return;
@@ -345,6 +343,17 @@ public:
         }
     }
     
+    // Timeout all clips except the specified clip index (1-based)
+    void timeoutAllExcept(int exceptClipId) {
+        //std::cout << "Timeout all clips except " << exceptClipId << " in layer " << id << std::endl;
+        
+        for (auto& clip : clips) {
+            if (clip && clip->id != exceptClipId) {
+                clip->forceExpire();
+            }
+        }
+    }
+
     // Print method for trickle-down printing
     void print(const std::string& indent) const {
         std::cout << indent << "Layer: " << std::endl;
@@ -380,7 +389,6 @@ private:
     int selectedClipId = 0;
     int selectedDeckId = 0;
     int connectedColumnId = 0;
-    std::vector<int> connectedClipIndices; // index: layer-1, value: connected clip index (1-based, 0 if none)
 
     // Track current deck to detect changes
     int currentDeckId;
@@ -398,12 +406,6 @@ private:
         CLIP
     };
     LastSelectionType lastSelectionType;
-
-    // Helper to ensure connectedClipIndices matches layer count
-    void ensureConnectedClipIndices() {
-        if (connectedClipIndices.size() != layers.size())
-            connectedClipIndices.resize(layers.size(), 0);
-    }
 
     // Add reference to OSC listener for queries
     ResolumeOSCListener* oscListener = nullptr;
@@ -433,8 +435,6 @@ public:
                        lastSelectedLayerId(0), lastSelectedClipLayerId(0), lastSelectedClipId(0),
                        lastSelectionType(LastSelectionType::NONE), oscListener(listener)
     {
-        // Start with no layers - they will be created as needed
-        ensureConnectedClipIndices();
         
         // Set up the callback if OSCListener is provided
         if (oscListener) {
@@ -519,31 +519,28 @@ public:
             bool isSelect = (endpoint == "select");
             bool isConnect = (endpoint == "connect");
 
-            if ((isSelect || isConnect) && !integers.empty() && integers[0] == 1) {
+            if (isSelect || (isConnect && ((!integers.empty() && integers[0] == 1) || (!floats.empty() && floats[0] == 1.0f)))) {
                 //std::cout << "Select/Connect Message: " << address << std::endl;
+                //debugOSC(pathParts, floats, integers, strings);
 
-                if (pathParts[0] == "columns" && pathParts.size() >= 2) {
+                if (pathParts[0] == "columns") {
                     int columnId = std::stoi(pathParts[1]);
                     if (isSelect) {
                         selectedColumnId = columnId;
                     } else if (isConnect) {
                         connectedColumnId = columnId;
-                        ensureConnectedClipIndices();
-                        for (size_t i = 0; i < layers.size(); ++i) {
-                            connectedClipIndices[i] = columnId;
-                        }
                     }
                     return;
                 }
 
-                if (pathParts[0] == "layers" && pathParts.size() >= 2) {
+                if (pathParts[0] == "layers") {
                     int layerId = std::stoi(pathParts[1]);
-                    if (pathParts.size() == 3 && isSelect) {
+                    if (pathParts.size() == 3 && pathParts[2] == "select") {
+                        //debugOSC(pathParts, floats, integers, strings);
                         // /layers/X/select
                         selectedLayerId = layerId;
                         return;
-                    }
-                    if (pathParts.size() >= 4 && pathParts[2] == "clips") {
+                    } else if (pathParts.size() >= 4 && pathParts[2] == "clips") {
                         // check if pathParts[3] starts with a digit. If it doesn't its probably transitiontarget, so ignore it.
                         if (pathParts[3].empty() || !std::isdigit(pathParts[3][0])) return;
 
@@ -553,12 +550,12 @@ public:
                             selectedClipLayerId = layerId;
                             selectedClipId = clipId;
                         } else if (isConnect) {
-                            ensureConnectedClipIndices();
-                            if (layerId >= 1 && layerId <= static_cast<int>(connectedClipIndices.size())) {
-                                connectedClipIndices[layerId - 1] = clipId;
-                            }
+                            // TODO maybe disconnectall?
                         }
                         return;
+                    } else {
+                        // Unhandled /layers/X/...
+                        debugOSC(pathParts, floats, integers, strings);
                     }
                 }
             }
@@ -609,7 +606,6 @@ public:
                 for (int i = 0; i < layerId; ++i) {
                     if (!layers[i]) layers[i] = std::make_shared<Layer>(i + 1);
                 }
-                ensureConnectedClipIndices();
             } catch (const std::exception& e) {
                 std::cerr << "Error resizing layers vector: " << e.what() << std::endl;
                 return nullptr;
@@ -736,11 +732,6 @@ public:
     
     bool isColumnConnected(int column) {
         return getConnectedColumn() == column;
-    }
-    
-    bool isClipConnected(int column, int layer) {
-        // Check if the given clip (column) is the connected clip for the given layer
-        return connectedClipIndices.size() >= static_cast<size_t>(layer) && connectedClipIndices[layer - 1] == column;
     }
 
     bool isClipPlaying(int column, int layer) {

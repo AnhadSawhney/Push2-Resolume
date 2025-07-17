@@ -271,12 +271,15 @@ public:
                 int resolumeColumn = gridCol + 1 + parentUI->columnOffset;
                 Color padColor = Color::BLACK;
                 //if (parentUI->resolumeTracker.getLayer(resolumeLayer)->getPlayingId() == resolumeColumn) {
+                
+                if (parentUI->resolumeTracker.doesClipExist(resolumeColumn, resolumeLayer)) {
+                    padColor = Color::WHITE;
+                } 
+
                 if (parentUI->resolumeTracker.isClipPlaying(resolumeColumn, resolumeLayer)) {
                     // Lit up according to column number (rainbow)
                     float hue = (float)(resolumeColumn - 1) * 360.0f / ((float)numColumns);
                     padColor = Color::fromHSV(hue, 1.0f, 1.0f);
-                } else if (parentUI->resolumeTracker.doesClipExist(resolumeColumn, resolumeLayer)) {
-                    padColor = Color::WHITE;
                 } 
                 setPadColor(gridRow, gridCol, padColor);
             }

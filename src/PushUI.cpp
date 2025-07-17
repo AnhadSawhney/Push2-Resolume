@@ -77,14 +77,14 @@ void PushUI::onMidiMessage(const PushMidiMessage& msg) {
             if (mode == Mode::Selecting) {
                 std::string address = "/composition/columns/" + std::to_string(column) + "/select";
                 if (oscSender) {
-                    oscSender->sendMessage(address, 1.0f);
+                    oscSender->sendMessage(address, 1);
                 } else {
                     std::cout << "Would select: " << address << std::endl;
                 }
             } else {
                 std::string address = "/composition/columns/" + std::to_string(column) + "/connect";
                 if (oscSender) {
-                    oscSender->sendMessage(address, 1.0f);
+                    oscSender->sendMessage(address, 1);
                 } else {
                     std::cout << "Would trigger: " << address << std::endl;
                 }
@@ -97,7 +97,7 @@ void PushUI::onMidiMessage(const PushMidiMessage& msg) {
             int layer = layerOffset + (cc - 36) + 1;
             std::string address = "/composition/layers/" + std::to_string(layer) + "/select";
             if (oscSender) {
-                oscSender->sendMessage(address, 1.0f);
+                oscSender->sendMessage(address, 1);
             } else {
                 std::cout << "Would select: " << address << std::endl;
             }
@@ -114,19 +114,19 @@ void PushUI::forceRefresh() {
 }
 
 void PushUI::handlePadPress(int note, int velocity) {
-    if (velocity == 0) return;
     if (note >= 36 && note <= 99) {
         int padIndex = note - 36;
         int gridRow = padIndex / 8;
         int gridCol = padIndex % 8;
         int resolumeLayer = gridRow + 1 + layerOffset;
         int resolumeColumn = gridCol + 1 + columnOffset;
+        
         if (mode == Mode::Selecting) {
             // Select the clip
             std::string address = "/composition/layers/" + std::to_string(resolumeLayer) +
                                   "/clips/" + std::to_string(resolumeColumn) + "/select";
             if (oscSender) {
-                oscSender->sendMessage(address, 1.0f);
+                oscSender->sendMessage(address, velocity ? 1 : 0);
             } else {
                 std::cout << "Would select: " << address << std::endl;
             }
@@ -135,9 +135,15 @@ void PushUI::handlePadPress(int note, int velocity) {
             std::string address = "/composition/layers/" + std::to_string(resolumeLayer) +
                              "/clips/" + std::to_string(resolumeColumn) + "/connect";
             if (oscSender) {
-                oscSender->sendMessage(address, 1.0f);
+                oscSender->sendMessage(address, velocity ? 1 : 0);
             } else {
                 std::cout << "Would trigger: " << address << std::endl;
+            }
+
+            // After triggering the clip, timeout all other clips in the same layer. If done before resolume may still send messages for the clip we tried to stop
+            auto layer = resolumeTracker.getLayer(resolumeLayer);
+            if (layer) {
+                layer->timeoutAllExcept(resolumeColumn);
             }
         }
     }
@@ -165,6 +171,7 @@ void PushUI::handleNavigationButtons(int controller, int value) {
         case 49:
             resolumeTracker.clear();
             // send the osc message to change the deck
+            if(d <= 1) break; // don't go below deck 1
             address = "/composition/decks/" + std::to_string(d-1) + "/select";
             if (oscSender) {
                 oscSender->sendMessage(address, 1);

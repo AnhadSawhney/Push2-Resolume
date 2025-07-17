@@ -113,6 +113,14 @@ public:
         return result.strings[0];
     }
     
+    // Send a query without waiting for response - response will be processed via normal message queue
+    void QueryNoResponse(const std::string& address) {
+        if (!oscSender) {
+            throw std::runtime_error("OSCSender not set");
+        }
+        oscSender->sendMessage(address, std::string("?"));
+    }
+    
     // Method to get queued messages (non-blocking)
     std::vector<OSCListenerMessage> getQueuedMessages() {
         std::lock_guard<std::mutex> lock(queueMutex);
