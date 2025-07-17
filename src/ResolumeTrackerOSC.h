@@ -136,6 +136,10 @@ public:
         return properties.size() > 3;
     }
 
+    bool playing() const { // unreliable. A clip can be left stopped at nonzero transport position
+        return properties.getFloat("transport/position") > 0;
+    }
+
     std::shared_ptr<Effect> getOrCreateEffect(const std::string& effectName) {
         // Find existing effect
         for (auto& effect : effects) {
@@ -222,7 +226,7 @@ public:
     }
 
     int getPlayingId() const {
-        return 0; //mostRecentPlayingClipId;
+        return mostRecentPlayingClipId;
     }
 
     std::shared_ptr<Clip> getOrCreateClip(int clipId) {
@@ -258,48 +262,61 @@ public:
         return newEffect;
     }
     
-    
-    
     void processOSCMessage(const std::vector<std::string>& pathParts, const std::vector<float>& floats, 
                           const std::vector<int>& integers, const std::vector<std::string>& strings) {
-        if (pathParts.empty()) {
-            // Direct layer property
-            properties.setFromOSCData("", floats, integers, strings);
-            return;
-        }
-        
-        std::vector<std::string> parts = pathParts; // Make a copy to modify
-        
-        if (parts[0] == "clips" && parts.size() >= 2) {
-            // /clips/X/...
-            int clipId = std::stoi(parts[1]);
-            auto clip = getOrCreateClip(clipId);
-            if (clip) {
-                // Remove "clips" and clip number from path
-                std::vector<std::string> remainingPath(parts.begin() + 2, parts.end());
-                clip->processOSCMessage(remainingPath, floats, integers, strings);
+        try {
+                                if (pathParts.empty()) {
+                // Direct layer property
+                properties.setFromOSCData("", floats, integers, strings);
+                return;
             }
-            return;
-        }
-        
-        if (parts[0] == "video" && parts.size() >= 3 && parts[1] == "effects") {
-            // /video/effects/effectname/...
-            std::string effectName = parts[2];
-            auto effect = getOrCreateEffect(effectName);
             
-            // Remove "video", "effects", and effect name from path
-            std::vector<std::string> remainingPath(parts.begin() + 3, parts.end());
-            effect->processOSCMessage(remainingPath, floats, integers, strings);
-            return;
+            std::vector<std::string> parts = pathParts; // Make a copy to modify
+            
+            if (parts[0] == "clips" && parts.size() >= 2) {
+                // /clips/X/...
+                // check if parts[1] starts with a digit. If it doesn't its probably transitiontarget, so ignore it.
+                if (parts[1].empty() || !std::isdigit(parts[1][0])) return;
+
+                int clipId = std::stoi(parts[1]);
+                auto clip = getOrCreateClip(clipId);
+                if (clip) {
+                    // Remove "clips" and clip number from path
+                    std::vector<std::string> remainingPath(parts.begin() + 2, parts.end());
+                    clip->processOSCMessage(remainingPath, floats, integers, strings);
+
+                    // if it is a transport/position with nonzero float payload, this is the most recently playing clip
+                    if (remainingPath.size() >= 2 && remainingPath[0] == "transport" && remainingPath[1] == "position") {
+                        if (!floats.empty() && floats[0] > 0) {
+                            mostRecentPlayingClipId = clipId;
+                        }
+                    }
+                }
+
+                return;
+            }
+            
+            if (parts[0] == "video" && parts.size() >= 3 && parts[1] == "effects") {
+                // /video/effects/effectname/...
+                std::string effectName = parts[2];
+                auto effect = getOrCreateEffect(effectName);
+                
+                // Remove "video", "effects", and effect name from path
+                std::vector<std::string> remainingPath(parts.begin() + 3, parts.end());
+                effect->processOSCMessage(remainingPath, floats, integers, strings);
+                return;
+            }
+            
+            // Store as general property
+            std::string endpoint = "";
+            for (size_t i = 0; i < parts.size(); ++i) {
+                if (i > 0) endpoint += "/";
+                endpoint += parts[i];
+            }
+            properties.setFromOSCData(endpoint, floats, integers, strings);
+        } catch (Exception& e) {
+            std::cerr << "Error processing OSC message in Layer " << id << ": " << e.what() << std::endl;
         }
-        
-        // Store as general property
-        std::string endpoint = "";
-        for (size_t i = 0; i < parts.size(); ++i) {
-            if (i > 0) endpoint += "/";
-            endpoint += parts[i];
-        }
-        properties.setFromOSCData(endpoint, floats, integers, strings);
     }
     
     void clear() {
@@ -449,7 +466,7 @@ public:
             // Only process /composition messages
             if (address.find("/composition") != 0) return;
 
-            if(!floats.empty()) return; // Ignore float messages for now
+            //if(!floats.empty()) return; // Ignore float messages for now
 
             // Split the address into components
             std::vector<std::string> pathParts = splitOSCPath(address);
@@ -706,6 +723,18 @@ public:
     bool isClipConnected(int column, int layer) {
         // Check if the given clip (column) is the connected clip for the given layer
         return connectedClipIndices.size() >= static_cast<size_t>(layer) && connectedClipIndices[layer - 1] == column;
+    }
+
+    bool isClipPlaying(int column, int layer) {
+        auto layerObj = getLayer(layer);
+        if (!layerObj) return false;
+        return layerObj->getPlayingId() == column;
+        
+        //auto clipObj = layerObj->getClip(column);
+        //if(clipObj) { // need to use this because getClip is not guaranteed to return a valid clip
+        //    return clipObj->playing();
+        //}
+        //return false;
     }
     
     bool doesLayerExist(int layer) {
