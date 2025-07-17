@@ -126,8 +126,13 @@ public:
     std::string name;
     PropertyDictionary properties;
     std::vector<std::shared_ptr<Effect>> effects;
+    
+    // Add timing tracking for transport position
+    mutable std::chrono::steady_clock::time_point lastTransportUpdate;
 
-    Clip(int clipId) : id(clipId), name("") {}
+    Clip(int clipId) : id(clipId), name("") {
+        lastTransportUpdate = std::chrono::steady_clock::now();
+    }
 
     void setName(const std::string& clipName) { name = clipName; }
 
@@ -136,7 +141,16 @@ public:
         return properties.size() > 3;
     }
 
-    bool playing() const { // unreliable. A clip can be left stopped at nonzero transport position
+    bool playing() const {
+        // Check if we have a recent transport update AND position > 0
+        auto now = std::chrono::steady_clock::now();
+        auto timeSinceUpdate = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastTransportUpdate);
+
+        // If no transport update in the last 50ms, consider it stopped
+        if (timeSinceUpdate.count() > 50) {
+            return false;
+        }
+        
         return properties.getFloat("transport/position") > 0;
     }
 
@@ -169,6 +183,11 @@ public:
         if (parts.size() == 1 && parts[0] == "name" && !strings.empty()) {
             setName(strings[0]);
             return;
+        }
+        
+        // Update timestamp for transport position messages
+        if (parts.size() == 2 && parts[0] == "transport" && parts[1] == "position") {
+            lastTransportUpdate = std::chrono::steady_clock::now();
         }
         
         if (parts[0] == "video" && parts.size() >= 3 && parts[1] == "effects") {
