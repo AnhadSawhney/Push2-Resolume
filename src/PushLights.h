@@ -22,6 +22,8 @@ private:
     uint8_t currentPadPaletteIndices[64] = {0};
     // Use a fixed array for all buttons (cc0-cc119)
     uint8_t currentButtonPaletteIndices[120] = {0};
+    // Touchstrip LED state (31 LEDs, values 0-7)
+    uint8_t currentTouchStripLEDs[31] = {0};
     bool lightsInitialized;
 
     // Unified palette: index -> {r,g,b,w}
@@ -124,6 +126,9 @@ public:
     PushLights(PushUSB& push) : pushDevice(push), parentUI(nullptr), lightsInitialized(false) {
         for (int i = 0; i < 64; ++i) currentPadPaletteIndices[i] = PALETTE_BLACK;
         for (int i = 0; i < 120; ++i) currentButtonPaletteIndices[i] = 0;
+        for (int i = 0; i < 31; ++i) currentTouchStripLEDs[i] = 0;
+
+        pushDevice.configureTouchStrip();
     }
 
     void setParentUI(PushUI* parent) { parentUI = parent; }
@@ -197,10 +202,78 @@ public:
         }
     }
 
+    // Set touchstrip LEDs with array of 31 values (0-7 each)
+    void setTouchStripLEDs(const uint8_t ledValues[31]) {
+        // Validate values are 0-7
+        for (int i = 0; i < 31; ++i) {
+            if (ledValues[i] > 7) {
+                std::cerr << "setTouchStripLEDs: LED values must be 0-7" << std::endl;
+                return;
+            }
+        }
+
+        // Check if state has changed
+        bool changed = false;
+        for (int i = 0; i < 31; ++i) {
+            if (currentTouchStripLEDs[i] != ledValues[i]) {
+                changed = true;
+                break;
+            }
+        }
+
+        if (!changed) {
+            return; // No change needed
+        }
+
+        // Update current state
+        for (int i = 0; i < 31; ++i) {
+            currentTouchStripLEDs[i] = ledValues[i];
+        }
+
+        // Send to device
+        pushDevice.setTouchStripLEDs(ledValues);
+    }
+
+    // Set touchstrip as meter from bottom up (0.0 = off, 1.0 = full)
+    void setTouchStripMeter(float level) {
+        // Clamp level to 0-1 range
+        level = std::max(0.0f, std::min(1.0f, level));
+
+        uint8_t ledValues[31] = {0};
+
+        if (level > 0.0f) {
+            // Calculate how many LEDs should be lit
+            float ledCount = level * 31.0f;
+            int fullLEDs = static_cast<int>(ledCount);
+            float remainder = ledCount - fullLEDs;
+
+            // Light up full LEDs
+            for (int i = 0; i < fullLEDs && i < 31; ++i) {
+                ledValues[i] = 7; // Full brightness
+            }
+
+            // Handle partial LED at the top
+            if (fullLEDs < 31 && remainder > 0.0f) {
+                // Scale remainder to 1-7 range (avoid 0 for partial)
+                uint8_t partialBrightness = static_cast<uint8_t>(remainder * 6.0f + 1.0f);
+                ledValues[fullLEDs] = std::min(partialBrightness, static_cast<uint8_t>(7));
+            }
+        }
+
+        setTouchStripLEDs(ledValues);
+    }
+
+    // Clear touchstrip (all LEDs off)
+    void clearTouchStrip() {
+        uint8_t ledValues[31] = {0};
+        setTouchStripLEDs(ledValues);
+    }
+
     // Force complete refresh (useful after reconnection or initialization)
     void forceRefresh() {
         for (int i = 0; i < 64; ++i) currentPadPaletteIndices[i] = PALETTE_BLACK;
         for (int i = 0; i < 120; ++i) currentButtonPaletteIndices[i] = PALETTE_BLACK;
+        for (int i = 0; i < 31; ++i) currentTouchStripLEDs[i] = 0;
         lightsInitialized = false;
     }
 
@@ -213,23 +286,18 @@ public:
             lightsInitialized = true;
         }
 
-        updateGridLights();
-        updateNavigationLights();
-        updateColumnAndLayerButtons();
-    }
-
-    // New: update column (cc20-27) and layer (cc36-43) button lights
-    void updateColumnAndLayerButtons() {
         if (!parentUI) return;
         int connectedColumn = parentUI->getResolumeTracker().getConnectedColumn();
         int selectedLayer = parentUI->getResolumeTracker().getSelectedLayer();
         int numColumns = parentUI->getNumColumns();
         int numLayers = parentUI->getNumLayers();
+        int layerOffset = parentUI->getLayerOffset();
+        int columnOffset = parentUI->getColumnOffset();
 
         // Column buttons: cc20-cc27
         for (int i = 0; i < 8; ++i) {
             int cc = 20 + i;
-            int column = parentUI->getColumnOffset() + i + 1; // 1-based column
+            int column = columnOffset + i + 1; // 1-based column
             if (column > numColumns || numColumns == 0) {
                 setButtonColorRGB(cc, Color::BLACK);
                 continue;
@@ -257,18 +325,30 @@ public:
             }
             setButtonColorRGB(cc, color);
         }
-    }
 
-    // Update grid lighting based on clips
-    void updateGridLights() {
-        if (!parentUI) return;
+        if (selectedLayer > 0) {
+            auto layer = parentUI->getResolumeTracker().getLayer(selectedLayer);
+            if (!layer) {
+                clearTouchStrip();
+                return;
+            }
 
-        int numColumns = parentUI->getNumColumns();
+            // Get opacity from layer properties, default to 1.0 if not found
+            float opacity = layer->properties.getFloat("video/opacity", 1.0f);
+            
+            // Clamp opacity to valid range
+            opacity = std::max(0.0f, std::min(1.0f, opacity));
+
+            // Display opacity as meter on touchstrip
+            setTouchStripMeter(opacity);
+        } else {
+            clearTouchStrip();
+        }
 
         for (int gridRow = 0; gridRow < 8; gridRow++) {
             for (int gridCol = 0; gridCol < 8; gridCol++) {
-                int resolumeLayer = gridRow + 1 + parentUI->layerOffset;
-                int resolumeColumn = gridCol + 1 + parentUI->columnOffset;
+                int resolumeLayer = gridRow + 1 + layerOffset;
+                int resolumeColumn = gridCol + 1 + columnOffset;
                 Color padColor = Color::BLACK;
                 //if (parentUI->resolumeTracker.getLayer(resolumeLayer)->getPlayingId() == resolumeColumn) {
                 
@@ -284,21 +364,11 @@ public:
                 setPadColor(gridRow, gridCol, padColor);
             }
         }
-    }
-
-    // Update navigation button lighting
-    void updateNavigationLights() {
-        if (!parentUI) return;
-
-        int layers = parentUI->getNumLayers();
-        int columns = parentUI->getNumColumns();
-        int layerOffset = parentUI->getLayerOffset();
-        int columnOffset = parentUI->getColumnOffset();
 
         // Only send MIDI if the button state has actually changed
-        setButtonColorBW(55, layerOffset + 8 < layers ? 255 : 0);     // BTN_OCTAVE_UP
+        setButtonColorBW(55, layerOffset + 8 < numLayers ? 255 : 0);     // BTN_OCTAVE_UP
         setButtonColorBW(54, layerOffset > 0 ? 255 : 0);   // BTN_OCTAVE_DOWN
-        setButtonColorBW(63, columnOffset + 8 < columns ? 255 : 0); // BTN_PAGE_RIGHT
+        setButtonColorBW(63, columnOffset + 8 < numColumns ? 255 : 0); // BTN_PAGE_RIGHT
         setButtonColorBW(62, columnOffset > 0 ? 255 : 0);  // BTN_PAGE_LEFT
 
         // Master button (cc28) always white

@@ -79,5 +79,6 @@ public:
 private:
     void handlePadPress(int note, int velocity);
     void handleNavigationButtons(int controller, int value);
+    void handleTouchStripPitchBend(uint16_t pitchBendValue);
 };
 

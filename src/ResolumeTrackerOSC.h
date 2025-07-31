@@ -712,6 +712,8 @@ public:
         if (oscListener) {
             oscListener->clearMessageQueue();
         }
+
+        std::cout << "Queue cleared" << std::endl;
         
         layers.clear();
         

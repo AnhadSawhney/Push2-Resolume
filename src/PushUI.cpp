@@ -61,6 +61,8 @@ void PushUI::toggleMode() {
 void PushUI::onMidiMessage(const PushMidiMessage& msg) {
     if (msg.isNoteOn()) {
         handlePadPress(msg.getNote(), msg.getVelocity());
+    } else if (msg.isPitchBend()) {
+        handleTouchStripPitchBend(msg.getPitchBend());
     } else if (msg.isControlChange()) {
         int cc = msg.getController();
         int value = msg.getValue();
@@ -165,11 +167,14 @@ void PushUI::handleNavigationButtons(int controller, int value) {
     }
 
     int d = resolumeTracker.getCurrentDeck();
+
     std::string address;
 
     switch (controller) {
         case 49:
-            resolumeTracker.clear();
+            // don't clear, resolumeTracker will automatically clear on deck change. 
+            //std::cout << "Deck: " << d << std::endl;
+            //resolumeTracker.clear();
             // send the osc message to change the deck
             if(d <= 1) break; // don't go below deck 1
             address = "/composition/decks/" + std::to_string(d-1) + "/select";
@@ -178,13 +183,50 @@ void PushUI::handleNavigationButtons(int controller, int value) {
             }
             break;
         case 48:
-            resolumeTracker.clear();
+            //std::cout << "Deck: " << d << std::endl;
+            //resolumeTracker.clear();
             // send the osc message to change the deck
             address = "/composition/decks/" + std::to_string(d+1) + "/select";
             if (oscSender) {
                 oscSender->sendMessage(address, 1);
             }
             break;
+    }
+}
+
+void PushUI::handleTouchStripPitchBend(uint16_t pitchBendValue) {
+    // Check if there's a selected layer
+    int selectedLayer = resolumeTracker.getSelectedLayer();
+    if (selectedLayer <= 0) {
+        return; // No layer selected
+    }
+    
+    // Convert 14-bit pitch bend value (0-16383) to normalized position (0.0-1.0)
+    float normalizedPosition = static_cast<float>(pitchBendValue) / 16383.0f;
+    
+    float opacity;
+    
+    // Create sensitive middle region with clipped top and bottom fourths
+    if (normalizedPosition <= 0.25f) {
+        // Bottom fourth - clamp to 0
+        opacity = 0.0f;
+    } else if (normalizedPosition >= 0.75f) {
+        // Top fourth - clamp to 1
+        opacity = 1.0f;
+    } else {
+        // Middle half (0.25 to 0.75) - map to full range (0.0 to 1.0)
+        opacity = (normalizedPosition - 0.25f) / 0.5f;
+    }
+    
+    // Clamp to valid range (should already be in range, but safety check)
+    opacity = std::max(0.0f, std::min(1.0f, opacity));
+    
+    // Send OSC message to set layer opacity
+    std::string address = "/composition/selectedlayer/video/opacity";
+    if (oscSender) {
+        oscSender->sendMessage(address, opacity);
+    } else {
+        std::cout << "Would set layer " << selectedLayer << " opacity to: " << opacity << std::endl;
     }
 }
 

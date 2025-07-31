@@ -6,6 +6,8 @@
 #include <sstream>
 #include <vector>
 
+#define PRINT_DETAILED_PROPERTIES
+
 // Unified property value type
 using PropertyValue = std::variant<float, int, std::string>;
 

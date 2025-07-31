@@ -29,11 +29,21 @@ struct PushMidiMessage {
     bool isControlChange() const { 
         return !data.empty() && (data[0] & 0xF0) == 0xB0; 
     }
+    bool isPitchBend() const {
+        return !data.empty() && (data[0] & 0xF0) == 0xE0;
+    }
     
     uint8_t getNote() const { return (data.size() >= 2) ? data[1] : 0; }
     uint8_t getVelocity() const { return (data.size() >= 3) ? data[2] : 0; }
     uint8_t getController() const { return (data.size() >= 2) ? data[1] : 0; }
     uint8_t getValue() const { return (data.size() >= 3) ? data[2] : 0; }
+    uint16_t getPitchBend() const {
+        if (data.size() >= 3) {
+            // Combine LSB and MSB to get 14-bit pitch bend value
+            return static_cast<uint16_t>(data[1]) | (static_cast<uint16_t>(data[2]) << 7);
+        }
+        return 8192; // Center value
+    }
 };
 
 class PushUSB {
@@ -325,5 +335,68 @@ public:
         } else {
             setPaletteEntry(index, 0, 0, 0, w);
         }
+    }
+
+    // Set touch strip LEDs (31 LEDs, values 0-7)
+    bool setTouchStripLEDs(const uint8_t ledValues[31]) {
+        if (!isConnected.load()) {
+            return false;
+        }
+
+        // Validate LED values are in range 0-7
+        for (int i = 0; i < 31; ++i) {
+            if (ledValues[i] > 7) {
+                return false;
+            }
+        }
+
+        // Pack LED values according to specification:
+        // Each byte packs two 3-bit LED values, with LED 30 getting special treatment
+        std::vector<uint8_t> sysex = {
+            0xF0, 0x00, 0x21, 0x1D, 0x01, 0x01, 0x19 // header + command ID
+        };
+
+        // Pack LEDs 0-29 into 15 bytes (2 LEDs per byte)
+        for (int i = 0; i < 15; i++) {
+            uint8_t led_low = ledValues[i * 2];     // even index LED
+            uint8_t led_high = ledValues[i * 2 + 1]; // odd index LED
+            uint8_t packed = (led_high << 3) | led_low;
+            sysex.push_back(packed);
+        }
+
+        // Pack LED 30 into the last byte (bits 2-0, with bits 7-3 as zero)
+        uint8_t last_byte = ledValues[30] & 0x07;
+        sysex.push_back(last_byte);
+
+        sysex.push_back(0xF7); // end of sysex
+
+        return sendSysEx(sysex);
+    }
+
+    // Configure touch strip for host control via sysex commands
+    bool configureTouchStrip() {
+        if (!isConnected.load()) {
+            return false;
+        }
+
+        // Configuration flags:
+        // bit 0: LEDs Controlled By (1 = Host)
+        // bit 1: Host Sends (1 = Sysex)
+        // bit 2: Values Sent As (0 = Pitch Bend)
+        // bit 3: LEDs Show (1 = Point)
+        // bit 4: Bar Starts At (0 = Bottom)
+        // bit 5: Do Autoreturn (0 = No)
+        // bit 6: Autoreturn To (0 = Bottom)
+        //
+        // Setting to 0x0B (00001011) = host control, sysex, pitch bend, point, center, autoreturn, bottom
+        uint8_t config = 0x0B;
+
+        std::vector<uint8_t> sysex = {
+            0xF0, 0x00, 0x21, 0x1D, 0x01, 0x01, 0x17, // header + command ID
+            config,
+            0xF7
+        };
+
+        return sendSysEx(sysex);
     }
 };
