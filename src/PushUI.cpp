@@ -36,13 +36,6 @@ bool PushUI::initialize() {
     return true;
 }
 
-int PushUI::getColumnOffset() const { return columnOffset; }
-int PushUI::getLayerOffset() const { return layerOffset; }
-int PushUI::getNumLayers() const { return resolumeTracker.getLayerCount(); }
-int PushUI::getNumColumns() const { return resolumeTracker.getColumnCount(); }
-
-ResolumeTracker& PushUI::getResolumeTracker() { return resolumeTracker; }
-
 void PushUI::update() {
     //resolumeTracker.update();
     lights->updateLights();
@@ -56,6 +49,8 @@ void PushUI::toggleMode() {
     } else {
         mode = Mode::Triggering;
     }
+
+    std::cout << "Mode toggled to: " << (mode == Mode::Triggering ? "Triggering" : "Selecting") << std::endl;
 }
 
 void PushUI::onMidiMessage(const PushMidiMessage& msg) {

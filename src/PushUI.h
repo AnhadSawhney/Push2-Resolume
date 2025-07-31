@@ -61,11 +61,6 @@ public:
     PushUI(PushUSB& push, ResolumeTracker& tracker, std::shared_ptr<OSCSender> osc = nullptr);
     ~PushUI();
     bool initialize();
-    int getColumnOffset() const;
-    int getLayerOffset() const;
-    int getNumLayers() const;
-    int getNumColumns() const;
-    ResolumeTracker& getResolumeTracker();
     void update();
     void onMidiMessage(const PushMidiMessage& msg);
     void forceRefresh();
@@ -75,6 +70,12 @@ public:
     Mode getMode() const { return mode; }
     void setMode(Mode m) { mode = m; }
     void toggleMode();
+
+    int getColumnOffset() const { return columnOffset; }
+    int getLayerOffset() const { return layerOffset; }
+    int getNumLayers() const { return resolumeTracker.getLayerCount(); }
+    int getNumColumns() const { return resolumeTracker.getColumnCount(); }
+    ResolumeTracker& getResolumeTracker() { return resolumeTracker; }
 
 private:
     void handlePadPress(int note, int velocity);

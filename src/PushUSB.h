@@ -12,6 +12,12 @@
 #include <chrono>
 #include <algorithm>
 
+#define NOMINMAX
+#include "libusb.h"
+
+#define ABLETON_VENDOR_ID 0x2982
+#define PUSH2_PRODUCT_ID  0x1967
+
 // Rename to avoid conflict with RtMidi's MidiMessage
 struct PushMidiMessage {
     std::vector<uint8_t> data;
@@ -54,6 +60,8 @@ private:
     
     std::atomic<bool> isConnected;
     std::function<void(const PushMidiMessage&)> midiCallback;  // Updated type
+
+    libusb_device_handle* deviceHandle = nullptr;
     
     // Static callback for RtMidi (C-style callback required)
     // This converts RtMidi callbacks to our callback system
@@ -95,6 +103,65 @@ private:
         }
         
         return foundInput && foundOutput;
+    }
+
+    static libusb_device_handle* open_push2_device(){
+        int result;
+
+        if ((result = libusb_init(NULL)) < 0) {
+            std::cout << "error: [" << result << "] could not initilialize usblib" << std::endl;
+            return NULL;
+        }
+
+        libusb_set_debug(NULL, LIBUSB_LOG_LEVEL_ERROR);
+
+        libusb_device** devices;
+        ssize_t count;
+        count = libusb_get_device_list(NULL, &devices);
+        if (count < 0) {
+            std::cout << "error: [" << count << "] could not get usb device list" << std::endl;
+            return NULL;
+        }
+
+        libusb_device* device;
+        libusb_device_handle* device_handle = NULL;
+
+        std::string ErrorMsg;
+
+        // set message in case we get to the end of the list w/o finding a device
+        ErrorMsg = "error: Ableton Push 2 device not found";
+
+        for (int i = 0; (device = devices[i]) != NULL; i++) {
+            struct libusb_device_descriptor descriptor;
+            if ((result = libusb_get_device_descriptor(device, &descriptor)) < 0) {
+                ErrorMsg = "error: [" + std::to_string(result) + "] could not get usb device descriptor";
+                continue;
+            }
+
+            if (descriptor.bDeviceClass == LIBUSB_CLASS_PER_INTERFACE && descriptor.idVendor == ABLETON_VENDOR_ID && descriptor.idProduct == PUSH2_PRODUCT_ID) {
+                if ((result = libusb_open(device, &device_handle)) < 0) {
+                    ErrorMsg = "error: [" + std::to_string(result) + "] could not open Ableton Push 2 device";
+                } else if ((result = libusb_claim_interface(device_handle, 0)) < 0) {
+                    ErrorMsg = "error: [" + std::to_string(result) + "] could not claim interface 0 of Push 2 device";
+                    libusb_close(device_handle);
+                    device_handle = NULL;
+                } else {
+                    break; // successfully opened
+                }
+            }
+        }
+
+        if (device_handle == NULL) {
+            std::cout << ErrorMsg << std::endl;
+        }
+
+        libusb_free_device_list(devices, 1);
+        return device_handle;
+    }
+
+    static void close_push2_device(libusb_device_handle* device_handle) {
+        libusb_release_interface(device_handle, 0);
+        libusb_close(device_handle);
     }
     
 public:
@@ -152,14 +219,21 @@ public:
             std::cout << "Successfully connected to Push 2 MIDI ports" << std::endl;
             
             // Test the connection
-            clearAllPads();
-            
-            return true;
-            
+            clearAllPads();            
         } catch (RtMidiError& error) {
             std::cerr << "MIDI connection error: " << error.getMessage() << std::endl;
             return false;
         }
+
+        std::cout << "Opening Push 2 USB display..." << std::endl;
+        deviceHandle = open_push2_device();
+
+        if (!deviceHandle) {
+            std::cerr << "Failed to open Push 2 USB display" << std::endl;
+            return false;
+        }
+
+        return true;
     }
     
     void disconnect() {
@@ -180,6 +254,12 @@ public:
             
         } catch (RtMidiError& error) {
             std::cerr << "MIDI disconnect error: " << error.getMessage() << std::endl;
+        }
+
+        if (deviceHandle) {
+            std::cout << "Closing Push 2 USB display..." << std::endl;
+            close_push2_device(deviceHandle);
+            deviceHandle = nullptr;
         }
     }
     
@@ -398,5 +478,79 @@ public:
         };
 
         return sendSysEx(sysex);
+    }
+
+    // Send frame to Push 2 display
+    bool sendDisplayFrameBlocking(const uint8_t* rgbaData) { // array is assumed to be 960x160 RGBA8
+        if (!deviceHandle || !rgbaData) {
+            return false;
+        }
+
+        // Send frame header first
+        uint8_t frameHeader[16] = {
+            0xFF, 0xCC, 0xAA, 0x88,
+            0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00
+        };
+
+        int transferred = 0;
+        int result = libusb_bulk_transfer(deviceHandle, 0x01, frameHeader, 16, &transferred, 1000);
+        if (result != 0 || transferred != 16) {
+            std::cerr << "Failed to send frame header: " << result << std::endl;
+            return false;
+        }
+
+        // Convert and send pixel data line by line
+        uint8_t lineBuffer[2048]; // 1920 bytes pixel data + 128 filler bytes
+
+        for (int y = 0; y < 160; y++) {
+            // Convert RGBA8 line to RGB565 with XOR pattern
+            convertLineToRGB565(rgbaData + (y * 960 * 4), lineBuffer, 960);
+
+            // Send line buffer
+            result = libusb_bulk_transfer(deviceHandle, 0x01, lineBuffer, 2048, &transferred, 1000);
+            if (result != 0 || transferred != 2048) {
+                std::cerr << "Failed to send line " << y << ": " << result << std::endl;
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+private:
+    // Convert RGBA8 line to RGB565 format with XOR pattern applied
+    static inline void convertLineToRGB565(const uint8_t* rgbaLine, uint8_t* lineBuffer, int width) {
+        // XOR pattern as specified: 0xE7, 0xF3, 0xE7, 0xFF
+        const uint8_t xorPattern[4] = {0xE7, 0xF3, 0xE7, 0xFF};
+
+        // Convert 960 RGBA pixels to RGB565
+        for (int x = 0; x < width; x++) {
+            uint8_t r = rgbaLine[x * 4 + 0];
+            uint8_t g = rgbaLine[x * 4 + 1];
+            uint8_t b = rgbaLine[x * 4 + 2];
+            // Alpha channel (rgbaLine[x * 4 + 3]) is ignored
+
+            // Convert 8-bit RGB to 5-6-5 format
+            uint16_t r5 = (r >> 3) & 0x1F;        // 5 bits
+            uint16_t g6 = (g >> 2) & 0x3F;        // 6 bits  
+            uint16_t b5 = (b >> 3) & 0x1F;        // 5 bits
+
+            // Pack into 16-bit BGR565: BBBBBGGGGGGRRRRR
+            uint16_t pixel = (b5 << 11) | (g6 << 5) | r5;
+
+            // Store as little-endian and apply XOR pattern
+            uint8_t lsb = pixel & 0xFF;
+            uint8_t msb = (pixel >> 8) & 0xFF;
+
+            lineBuffer[x * 2 + 0] = lsb ^ xorPattern[(x * 2 + 0) % 4];
+            lineBuffer[x * 2 + 1] = msb ^ xorPattern[(x * 2 + 1) % 4];
+        }
+
+        // Fill remaining bytes with XOR pattern applied to zeros
+        for (int i = 1920; i < 2048; i++) {
+            lineBuffer[i] = 0x00 ^ xorPattern[i % 4];
+        }
     }
 };
