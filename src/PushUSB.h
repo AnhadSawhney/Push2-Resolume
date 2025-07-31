@@ -523,34 +523,48 @@ private:
     // Convert RGBA8 line to RGB565 format with XOR pattern applied
     static inline void convertLineToRGB565(const uint8_t* rgbaLine, uint8_t* lineBuffer, int width) {
         // XOR pattern as specified: 0xE7, 0xF3, 0xE7, 0xFF
-        const uint8_t xorPattern[4] = {0xE7, 0xF3, 0xE7, 0xFF};
-
-        // Convert 960 RGBA pixels to RGB565
-        for (int x = 0; x < width; x++) {
-            uint8_t r = rgbaLine[x * 4 + 0];
-            uint8_t g = rgbaLine[x * 4 + 1];
-            uint8_t b = rgbaLine[x * 4 + 2];
-            // Alpha channel (rgbaLine[x * 4 + 3]) is ignored
-
-            // Convert 8-bit RGB to 5-6-5 format
-            uint16_t r5 = (r >> 3) & 0x1F;        // 5 bits
-            uint16_t g6 = (g >> 2) & 0x3F;        // 6 bits  
-            uint16_t b5 = (b >> 3) & 0x1F;        // 5 bits
-
-            // Pack into 16-bit BGR565: BBBBBGGGGGGRRRRR
-            uint16_t pixel = (b5 << 11) | (g6 << 5) | r5;
-
-            // Store as little-endian and apply XOR pattern
-            uint8_t lsb = pixel & 0xFF;
-            uint8_t msb = (pixel >> 8) & 0xFF;
-
-            lineBuffer[x * 2 + 0] = lsb ^ xorPattern[(x * 2 + 0) % 4];
-            lineBuffer[x * 2 + 1] = msb ^ xorPattern[(x * 2 + 1) % 4];
+        const uint32_t xorPattern32 = 0xFFE7F3E7; // Little-endian: E7, F3, E7, FF
+        
+        // Process pixels in pairs for 32-bit XOR operations
+        const int pixelPairs = width / 2;  // 960 / 2 = 480 pairs
+        
+        const uint8_t* src = rgbaLine;
+        uint32_t* dst32 = reinterpret_cast<uint32_t*>(lineBuffer);
+        
+        // Process 2 pixels at a time (4 bytes output per iteration)
+        for (int pair = 0; pair < pixelPairs; pair++) {
+            // First pixel
+            uint8_t r1 = src[0];
+            uint8_t g1 = src[1]; 
+            uint8_t b1 = src[2];
+            // Skip alpha (src[3])
+            src += 4;
+            
+            // Second pixel
+            uint8_t r2 = src[0];
+            uint8_t g2 = src[1];
+            uint8_t b2 = src[2];
+            // Skip alpha (src[3])
+            src += 4;
+            
+            // Convert both pixels to RGB565
+            uint16_t pixel1 = ((b1 & 0xF8) << 8) | ((g1 & 0xFC) << 3) | (r1 >> 3);
+            uint16_t pixel2 = ((b2 & 0xF8) << 8) | ((g2 & 0xFC) << 3) | (r2 >> 3);
+            
+            // Pack both pixels into a 32-bit value (little-endian)
+            uint32_t packed = static_cast<uint32_t>(pixel1) | (static_cast<uint32_t>(pixel2) << 16);
+            
+            // Apply XOR pattern to all 4 bytes at once and store
+            dst32[pair] = packed ^ xorPattern32;
         }
-
-        // Fill remaining bytes with XOR pattern applied to zeros
-        for (int i = 1920; i < 2048; i++) {
-            lineBuffer[i] = 0x00 ^ xorPattern[i % 4];
+        
+        // Fill remaining 128 bytes (1920-2048) efficiently
+        uint32_t* fillPtr = reinterpret_cast<uint32_t*>(lineBuffer + 1920);
+        const uint32_t fillPattern = xorPattern32; // XOR with 0x00000000 is just the pattern itself
+        
+        // Fill in 32-bit chunks (128 bytes = 32 uint32_t)
+        for (int i = 0; i < 32; i++) {
+            fillPtr[i] = fillPattern;
         }
     }
 };
