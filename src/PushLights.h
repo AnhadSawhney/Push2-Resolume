@@ -288,7 +288,7 @@ public:
 
         if (!parentUI) return;
         int connectedColumn = parentUI->getResolumeTracker().getConnectedColumn();
-        int selectedLayer = parentUI->getResolumeTracker().getSelectedLayer();
+        int selectedLayer = parentUI->getResolumeTracker().getSelectedLayerId();
         int numColumns = parentUI->getNumColumns();
         int numLayers = parentUI->getNumLayers();
         int layerOffset = parentUI->getLayerOffset();
@@ -314,13 +314,22 @@ public:
         // Layer buttons: cc36-cc43
         for (int i = 0; i < 8; ++i) {
             int cc = 36 + i;
-            int layer = parentUI->getLayerOffset() + i + 1; // 1-based layer
+            int layerIdx = parentUI->getLayerOffset() + i + 1; // 1-based layer
+
             Color color = Color::BLACK;
-            if (layer <= numLayers && numLayers > 0 && parentUI->resolumeTracker.doesLayerExist(layer)) {
-                if (layer == selectedLayer) {
-                    color = Color::GREEN;
-                } else {
-                    color = Color::WHITE;
+            if (layerIdx <= numLayers && numLayers > 0 && parentUI->resolumeTracker.doesLayerExist(layerIdx)) {
+                auto layerObj = parentUI->getResolumeTracker().getLayer(layerIdx);
+                int crossfaderGroup = layerObj->properties.getInt("crossfadergroup");
+
+                switch (crossfaderGroup) {
+                    case 1: // A
+                        color = Color::fromHSV(240.0f, 1.0f, (layerIdx == selectedLayer)? 1.0f : 0.5f);
+                        break;
+                    case 2: // B
+                        color = Color::fromHSV(330.0f, 1.0f, (layerIdx == selectedLayer)? 1.0f : 0.5f);
+                        break;
+                    default:
+                        color = Color::fromHSV(0.0f, 0.0f, (layerIdx == selectedLayer)? 1.0f : 0.5f);
                 }
             }
             setButtonColorRGB(cc, color);
@@ -377,5 +386,9 @@ public:
         //set shift and select buttons to white
         setButtonColorBW(49, 128);
         setButtonColorBW(48, 128);
+
+        // set "setup" and "user" buttons to white
+        setButtonColorBW(30, 128);
+        setButtonColorBW(59, 128);
     }
 };

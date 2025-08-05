@@ -621,9 +621,16 @@ public:
         return nullptr;
     }
     
-    std::shared_ptr<const Layer> getLayer(int layerId) const {
-        if (layerId >= 1 && layerId <= static_cast<int>(layers.size())) {
-            return layers[layerId - 1];
+    //std::shared_ptr<const Layer> getLayer(int layerId) const {
+    //    if (layerId >= 1 && layerId <= static_cast<int>(layers.size())) {
+    //        return layers[layerId - 1];
+    //    }
+    //    return nullptr;
+    //}
+
+    std::shared_ptr<const Layer> getSelectedLayer() const {
+        if (selectedLayerId >= 1 && selectedLayerId <= static_cast<int>(layers.size())) {
+            return layers[selectedLayerId - 1];
         }
         return nullptr;
     }
@@ -636,7 +643,7 @@ public:
     //bool isTempoControllerPlaying() const { 
     //    return deckProperties.getInt("tempocontroller/play", 0) == 1;
     //}
-    int getSelectedLayer() const { return selectedLayerId; }
+    int getSelectedLayerId() const { return selectedLayerId; }
     int getSelectedColumn() const { return selectedColumnId; }
     int getConnectedColumn() const { return connectedColumnId; }
     int getCurrentDeckId() const { return currentDeckId; }

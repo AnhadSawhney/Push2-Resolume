@@ -68,6 +68,38 @@ void PushUI::onMidiMessage(const PushMidiMessage& msg) {
             return;
         }
 
+        auto layer = resolumeTracker.getSelectedLayer();
+
+        if (cc == 30 && value > 0) { // Setup button pressed
+            if (layer && layer->properties.getInt("crossfadergroup") == 1) {
+                // Crossfader group A button pressed
+                std::string address = "/composition/selectedlayer/crossfadergroup";
+                if (oscSender) {
+                    oscSender->sendMessage(address, 0);
+                }
+            } else {
+                std::string address = "/composition/selectedlayer/crossfadergroup";
+                if (oscSender) {
+                    oscSender->sendMessage(address, 1);
+                }
+            }
+            return;
+        } else if (cc == 59 && value > 0) { // User button pressed
+            if (layer && layer->properties.getInt("crossfadergroup") == 2) {
+                // Crossfader group B button pressed
+                std::string address = "/composition/selectedlayer/crossfadergroup";
+                if (oscSender) {
+                    oscSender->sendMessage(address, 0);
+                }
+            } else {
+                std::string address = "/composition/selectedlayer/userbutton";
+                if (oscSender) {
+                    oscSender->sendMessage(address, 2);
+                }
+            }
+            return;
+        }
+
         // Column buttons
         if (cc >= 20 && cc <= 27 && value > 0) {
             int column = columnOffset + (cc - 20) + 1;
@@ -191,7 +223,7 @@ void PushUI::handleNavigationButtons(int controller, int value) {
 
 void PushUI::handleTouchStripPitchBend(uint16_t pitchBendValue) {
     // Check if there's a selected layer
-    int selectedLayer = resolumeTracker.getSelectedLayer();
+    int selectedLayer = resolumeTracker.getSelectedLayerId();
     if (selectedLayer <= 0) {
         return; // No layer selected
     }
